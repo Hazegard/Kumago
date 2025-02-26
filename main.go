@@ -142,6 +142,11 @@ func (m *Monitor) IsFullGreen() bool {
 func main() {
 	config := Config{}
 	_ = kong.Parse(&config)
+
+	if !CheckAvailability() {
+		fmt.Println("🏩")
+		return
+	}
 	titles, err := GetTitleDict()
 	if err != nil {
 		fmt.Println(err)
