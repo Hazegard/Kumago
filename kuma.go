@@ -46,6 +46,19 @@ type MonitorTitle struct {
 	Type      string `json:"type"`
 }
 
+func CheckAvailability() bool {
+	r, err := http.Head(fmt.Sprintf("%s/dashboard", URL))
+	if err != nil {
+		return false
+	}
+	defer r.Body.Close()
+
+	if r.StatusCode != 200 {
+		return false
+	}
+	return true
+}
+
 func GetTitleDict() (map[string]MonitorTitle, error) {
 	r, err := http.Get(fmt.Sprintf("%s/status/all", URL))
 	if err != nil {
