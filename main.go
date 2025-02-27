@@ -38,11 +38,11 @@ func main() {
 	}
 
 	length := 0
-	for group, monitors := range dashboard {
-		if dashboard.IsFullGreen(group, ignore) && !config.All {
-			continue
-		}
+	for _, monitors := range dashboard {
 		for _, monitor := range monitors {
+			if monitor.IsFullGreen() && !config.All {
+				continue
+			}
 			l := len(monitor.Name)
 			if l > length {
 				length = l

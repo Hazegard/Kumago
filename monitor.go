@@ -29,10 +29,14 @@ const (
 
 var (
 	ignore = map[string]struct{}{
-		"updog - Docker":                  struct{}{},
-		"UpDog - drop.newtechjob.com":     struct{}{},
-		"python-http - Docker":            struct{}{},
-		"Python HTTP - py.newtechjob.com": struct{}{},
+		"updog - Docker":                                      struct{}{},
+		"UpDog - drop.newtechjob.com":                         struct{}{},
+		"python-http - Docker":                                struct{}{},
+		"Python HTTP - py.newtechjob.com":                     struct{}{},
+		"Python HTTPS - py.newtechjob.com":                    struct{}{},
+		"sslipio - Docker":                                    struct{}{},
+		"SSLIP DNS subdomain - X.X.X.X.rebind.newtechjob.com": struct{}{},
+		"SSLIP DNS subdomain - X.X.X.X.rebind.xmc.ovh":        struct{}{},
 	}
 )
 
