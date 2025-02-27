@@ -15,6 +15,12 @@ import (
 	"strings"
 )
 
+var (
+	Commit  = "none"
+	Date    = "2006-01-02T15:04:05Z"
+	Version = "dev"
+)
+
 const APP_NAME = "kumago"
 
 type Color struct {
@@ -91,6 +97,11 @@ type Config struct {
 	Emoji         bool         `help:"Show synthesis emoji" default:"true" negatable:""`
 	Color         Color        `help:"Color" default:"" embed:"" prefix:"color-"`
 	Symbol        Symbol       `help:"Symbol" default:"" embed:"" prefix:"icon-"`
+	Version       bool         `help:"Show version" default:"false"`
+}
+
+func (c *Config) GetVersion() string {
+	return fmt.Sprintf("%s %s-%.8s (%s)", APP_NAME, Version, Commit, Date)
 }
 
 type IgnoreConfig struct {
@@ -178,6 +189,11 @@ func main() {
 		kong.DefaultEnvars(strings.ToUpper(APP_NAME)),
 	}
 	_ = kong.Parse(&config, kongOptions...)
+	if config.Version {
+		fmt.Printf(config.GetVersion())
+		return
+	}
+
 	if !CheckAvailability(config.Url) {
 		Error(fmt.Errorf("Dashboard unavailable: not connected to kuma"), config)
 		return
