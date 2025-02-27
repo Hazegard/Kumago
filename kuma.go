@@ -59,8 +59,8 @@ func CheckAvailability() bool {
 	return true
 }
 
-func GetTitleDict() (map[string]MonitorTitle, error) {
-	r, err := http.Get(fmt.Sprintf("%s/status/all", URL))
+func GetTitleDict(dashboardName string) (map[string]MonitorTitle, error) {
+	r, err := http.Get(fmt.Sprintf("%s/status/%s", URL, dashboardName))
 	if err != nil {
 		return nil, err
 	}
@@ -69,10 +69,10 @@ func GetTitleDict() (map[string]MonitorTitle, error) {
 	re := regexp.MustCompile(`window\.preloadData\s*=\s*(\{.*\});`)
 	matches := re.FindStringSubmatch(string(body))
 	if matches == nil {
-		return nil, fmt.Errorf("could not find window preload data")
+		return nil, fmt.Errorf("unable to get dashboard %s", dashboardName)
 	}
 	if len(matches) < 2 {
-		return nil, fmt.Errorf("could not find window preload data")
+		return nil, fmt.Errorf("unable to get dashboard %s", dashboardName)
 	}
 	content := strings.ReplaceAll(matches[1], "'", "\"")
 	titles := Titles{}
@@ -105,8 +105,8 @@ func GetTitleDict() (map[string]MonitorTitle, error) {
 	return monitorTitles, nil
 }
 
-func GetAll(titles map[string]MonitorTitle) (HeartBeatList, error) {
-	r, err := http.Get(fmt.Sprintf("%s/api/status-page/heartbeat/all", URL))
+func GetDashboard(dashboardName string, titles map[string]MonitorTitle) (HeartBeatList, error) {
+	r, err := http.Get(fmt.Sprintf("%s/api/status-page/heartbeat/%s", URL, dashboardName))
 	if err != nil {
 		return HeartBeatList{}, err
 	}
@@ -116,15 +116,15 @@ func GetAll(titles map[string]MonitorTitle) (HeartBeatList, error) {
 		return HeartBeatList{}, err
 	}
 
-	all := All{}
+	dashboard := Dashboard{}
 
-	err = json.Unmarshal(body, &all)
+	err = json.Unmarshal(body, &dashboard)
 	if err != nil {
 		return HeartBeatList{}, err
 	}
 
 	hblist := make(HeartBeatList)
-	for monitorId, status := range all.HeartBeat {
+	for monitorId, status := range dashboard.HeartBeat {
 		group := Group{
 			Id:   titles[monitorId].GroupId,
 			Name: titles[monitorId].GroupName,
