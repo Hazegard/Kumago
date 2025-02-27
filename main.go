@@ -2,187 +2,18 @@ package main
 
 import (
 	"fmt"
-	"github.com/gen2brain/beeep"
-	"strings"
-	"time"
-
 	"github.com/alecthomas/kong"
+	"github.com/gen2brain/beeep"
+	"os"
 )
 
 const URL = "https://status.xmc.ovh"
 
-type State int
-
-const (
-	KO State = iota
-	OK
-	Recovered
-)
-
-var (
-	colors = map[string]int{
-		"Black":   30,
-		"Red":     31,
-		"Green":   32,
-		"Yellow":  33,
-		"Blue":    34,
-		"Magenta": 35,
-		"Cyan":    36,
-		"White":   37,
-	}
-
-	ignore = map[string]struct{}{
-		"updog - Docker":              struct{}{},
-		"UpDog - drop.newtechjob.com": struct{}{},
-	}
-)
-
 type Config struct {
-	All    bool `help:"Show all statuses" default:"false"`
-	Xbar   bool `help:"Show Xbar statuses" default:"false"`
-	Notify bool `help:"Show notify statuses" default:"false"`
-}
-
-type StatusTime time.Time
-
-func (st *StatusTime) UnmarshalJSON(b []byte) error {
-	s := strings.Trim(string(b), "\"")
-	t, err := time.Parse("2006-01-02 15:04:05.000", s)
-	if err != nil {
-		return err
-	}
-	*st = StatusTime(t)
-	return nil
-}
-
-func (st StatusTime) MarshalJSON() ([]byte, error) {
-	t := time.Time(st)
-	s := t.Format("2006-01-02 15:04:05.000")
-	return []byte(s), nil
-}
-
-type Status struct {
-	Status State      `json:"status"`
-	Date   StatusTime `json:"time"`
-	Msg    string     `json:"msg"`
-	Ping   float64    `json:"ping"`
-}
-
-func (st *Status) Beat() string {
-	color := 0
-	switch st.Status {
-	case KO:
-		color = colors["Red"]
-	case OK:
-		color = colors["Green"]
-	case Recovered:
-		color = colors["Yellow"]
-	default:
-		color = colors["White"]
-	}
-	return fmt.Sprintf("\033[%dm%s\033[0m", color, "█")
-}
-
-func (st *Status) HasDowntime() bool {
-	return st.Status == 0
-}
-
-type KumaHeartBeatList map[string][]Status
-
-type UptimeList map[string]float64
-type All struct {
-	Uptime    UptimeList        `json:"uptimeList"`
-	HeartBeat KumaHeartBeatList `json:"heartbeatList"`
-}
-
-type Group struct {
-	Id   int    `json:"id"`
-	Name string `json:"name"`
-}
-type HeartBeatList map[Group][]Monitor
-
-func (hbl *HeartBeatList) IsFullGreen(group Group, ignore map[string]struct{}) bool {
-	monitors := (*hbl)[group]
-	for _, monitor := range monitors {
-		if _, ok := ignore[monitor.Name]; ok {
-			continue
-		}
-		for _, status := range monitor.Status {
-			if status.Status != 1 {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-type Monitor struct {
-	Id     string
-	Name   string
-	Status []Status
-}
-
-func (m *Monitor) analyzeStatus() State {
-	n := len(m.Status)
-	if n == 0 {
-		return OK
-	}
-
-	// Check if status recovered
-	if m.Status[n-1].Status == Recovered {
-		return Recovered
-	}
-	if m.Status[n-1].Status == KO {
-		return KO
-	}
-	for i := len(m.Status) - 1; i >= 0; i-- {
-		if i == len(m.Status)-1 {
-			// explicitly skip the last element as here it is always OK
-			continue
-		}
-		if m.Status[i].Status == KO {
-			return Recovered
-		}
-	}
-	return OK
-}
-
-func (m *Monitor) HasResolvedDowntime() bool {
-
-	for i := len(m.Status) - 1; i >= 0; i-- {
-
-	}
-	for _, status := range m.Status {
-		if status.HasDowntime() {
-			return true
-		}
-	}
-	return false
-}
-
-func (m *Monitor) HasDowntime() bool {
-	for _, status := range m.Status {
-		if status.HasDowntime() {
-			return true
-		}
-	}
-	return false
-}
-
-func (m *Monitor) Beats() string {
-	sb := strings.Builder{}
-	for _, status := range m.Status {
-		sb.WriteString(status.Beat())
-	}
-	return sb.String()
-}
-func (m *Monitor) IsFullGreen() bool {
-	for _, status := range m.Status {
-		if status.Status != 1 {
-			return false
-		}
-	}
-	return true
+	All           bool   `help:"Show all statuses" default:"false"`
+	Xbar          bool   `help:"Show Xbar statuses" default:"false"`
+	Notify        bool   `help:"Show notify statuses" default:"false"`
+	DashboardPage string `help:"Dashboard page" default:"all" arg:""`
 }
 
 func main() {
@@ -190,24 +21,24 @@ func main() {
 	_ = kong.Parse(&config)
 
 	if !CheckAvailability() {
-		fmt.Println("🏩")
+		Error(fmt.Errorf("Dashboard unavailable: not connected to kuma"), config)
 		return
 	}
-	titles, err := GetTitleDict()
+	titles, err := GetTitleDict(config.DashboardPage)
 	if err != nil {
-		fmt.Println(err)
+		Error(fmt.Errorf("Dashboard unavailable: %s", err), config)
 		return
 	}
 
-	all, err := GetAll(titles)
+	dashboard, err := GetDashboard(config.DashboardPage, titles)
 	if err != nil {
-		fmt.Println(err)
+		Error(fmt.Errorf("Dashboard unavailable: %s", err), config)
 		return
 	}
 
 	length := 0
-	for group, monitors := range all {
-		if all.IsFullGreen(group, ignore) && !config.All {
+	for group, monitors := range dashboard {
+		if dashboard.IsFullGreen(group, ignore) && !config.All {
 			continue
 		}
 		for _, monitor := range monitors {
@@ -225,8 +56,8 @@ func main() {
 
 	globalState := OK
 
-	for group, monitors := range all {
-		if all.IsFullGreen(group, ignore) && !config.All {
+	for group, monitors := range dashboard {
+		if dashboard.IsFullGreen(group, ignore) && !config.All {
 			continue
 		}
 		content += fmt.Sprintf("\n%s\n", group.Name)
@@ -273,4 +104,14 @@ func main() {
 			fmt.Println(err)
 		}
 	}
+}
+
+func Error(err error, config Config) {
+	if config.Xbar {
+		fmt.Printf("🏩\n---\n")
+	}
+	if err != nil {
+		fmt.Println(err)
+	}
+	os.Exit(1)
 }
