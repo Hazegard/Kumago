@@ -11,6 +11,14 @@ import (
 
 const URL = "https://status.xmc.ovh"
 
+type State int
+
+const (
+	KO State = iota
+	OK
+	Recovered
+)
+
 var (
 	colors = map[string]int{
 		"Black":   30,
@@ -54,7 +62,7 @@ func (st StatusTime) MarshalJSON() ([]byte, error) {
 }
 
 type Status struct {
-	Status int        `json:"status"`
+	Status State      `json:"status"`
 	Date   StatusTime `json:"time"`
 	Msg    string     `json:"msg"`
 	Ping   float64    `json:"ping"`
@@ -63,11 +71,11 @@ type Status struct {
 func (st *Status) Beat() string {
 	color := 0
 	switch st.Status {
-	case 0:
+	case KO:
 		color = colors["Red"]
-	case 1:
+	case OK:
 		color = colors["Green"]
-	case 2:
+	case Recovered:
 		color = colors["Yellow"]
 	default:
 		color = colors["White"]
@@ -112,6 +120,44 @@ type Monitor struct {
 	Id     string
 	Name   string
 	Status []Status
+}
+
+func (m *Monitor) analyzeStatus() State {
+	n := len(m.Status)
+	if n == 0 {
+		return OK
+	}
+
+	// Check if status recovered
+	if m.Status[n-1].Status == Recovered {
+		return Recovered
+	}
+	if m.Status[n-1].Status == KO {
+		return KO
+	}
+	for i := len(m.Status) - 1; i >= 0; i-- {
+		if i == len(m.Status)-1 {
+			// explicitly skip the last element as here it is always OK
+			continue
+		}
+		if m.Status[i].Status == KO {
+			return Recovered
+		}
+	}
+	return OK
+}
+
+func (m *Monitor) HasResolvedDowntime() bool {
+
+	for i := len(m.Status) - 1; i >= 0; i-- {
+
+	}
+	for _, status := range m.Status {
+		if status.HasDowntime() {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Monitor) HasDowntime() bool {
@@ -176,7 +222,8 @@ func main() {
 	if config.Xbar {
 		xbar = " | font=\"FiraCode Nerd Font\""
 	}
-	downtime := false
+
+	globalState := OK
 
 	for group, monitors := range all {
 		if all.IsFullGreen(group, ignore) && !config.All {
@@ -187,18 +234,32 @@ func main() {
 			if monitor.IsFullGreen() && !config.All {
 				continue
 			}
-			if monitor.HasDowntime() {
-				downtime = true
-			}
 			content += fmt.Sprintf("%-*s  %s%s\n", length, monitor.Name, monitor.Beats(), xbar)
+			if globalState == KO {
+				continue
+			}
+			monitorStatus := monitor.analyzeStatus()
+			if monitorStatus == KO {
+				globalState = KO
+				continue
+			}
+			if monitorStatus == Recovered && globalState == OK {
+				globalState = Recovered
+				continue
+			}
 		}
 	}
 
 	header := ""
 	if config.Xbar {
 		icon := "👌"
-		if downtime {
+		switch globalState {
+		case KO:
 			icon = "🔥"
+		case OK:
+			icon = "👌"
+		case Recovered:
+			icon = "🤔"
 		}
 		header = fmt.Sprintf("%s\n---", icon)
 		content = fmt.Sprintf("%s%s", header, content)
@@ -206,7 +267,7 @@ func main() {
 
 	fmt.Print(content)
 
-	if config.Notify && downtime {
+	if config.Notify && globalState == KO {
 		err = beeep.Alert("BEEP", "beep", "beep")
 		if err != nil {
 			fmt.Println(err)
