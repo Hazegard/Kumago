@@ -129,7 +129,7 @@ func main() {
 		content = fmt.Sprintf("%s\n%s\nRefresh... | refresh=true", header, content)
 	}
 
-	fmt.Print(content)
+	fmt.Println(content)
 
 	if config.Notify && globalState == KO {
 		err = beeep.Alert("BEEP", "beep", "beep")
