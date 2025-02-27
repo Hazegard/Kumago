@@ -126,7 +126,7 @@ func main() {
 			icon = "🤔"
 		}
 		header = fmt.Sprintf("%s\n---", icon)
-		content = fmt.Sprintf("%s%s\nRefresh... | refresh=true", header, content)
+		content = fmt.Sprintf("%s\n%s\nRefresh... | refresh=true", header, content)
 	}
 
 	fmt.Print(content)
