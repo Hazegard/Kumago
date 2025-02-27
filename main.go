@@ -6,6 +6,7 @@ import (
 	"github.com/gen2brain/beeep"
 	"os"
 	"sort"
+	"strings"
 )
 
 const URL = "https://status.xmc.ovh"
@@ -111,6 +112,8 @@ func main() {
 		}
 	}
 
+	content = strings.TrimSpace(content)
+
 	header := ""
 	if config.Xbar {
 		icon := "👌"
@@ -123,7 +126,7 @@ func main() {
 			icon = "🤔"
 		}
 		header = fmt.Sprintf("%s\n---", icon)
-		content = fmt.Sprintf("%s%s", header, content)
+		content = fmt.Sprintf("%s%s\nRefresh... | refresh=true", header, content)
 	}
 
 	fmt.Print(content)
