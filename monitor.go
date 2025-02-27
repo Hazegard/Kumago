@@ -29,8 +29,10 @@ const (
 
 var (
 	ignore = map[string]struct{}{
-		"updog - Docker":              struct{}{},
-		"UpDog - drop.newtechjob.com": struct{}{},
+		"updog - Docker":                  struct{}{},
+		"UpDog - drop.newtechjob.com":     struct{}{},
+		"python-http - Docker":            struct{}{},
+		"Python HTTP - py.newtechjob.com": struct{}{},
 	}
 )
 
@@ -113,7 +115,10 @@ type Monitor struct {
 	Status []Status
 }
 
-func (m *Monitor) analyzeStatus() State {
+func (m *Monitor) analyzeStatus(ignore map[string]struct{}) State {
+	if _, ok := ignore[m.Name]; ok {
+		return OK
+	}
 	n := len(m.Status)
 	if n == 0 {
 		return OK

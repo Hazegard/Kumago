@@ -5,6 +5,7 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/gen2brain/beeep"
 	"os"
+	"sort"
 )
 
 const URL = "https://status.xmc.ovh"
@@ -56,20 +57,48 @@ func main() {
 
 	globalState := OK
 
-	for group, monitors := range dashboard {
-		if dashboard.IsFullGreen(group, ignore) && !config.All {
+	groups := []Group{}
+	for group := range dashboard {
+		groups = append(groups, group)
+	}
+	sort.Slice(groups, func(i, j int) bool {
+		return groups[i].Name < groups[j].Name
+	})
+	for _, group := range groups {
+		monitors := dashboard[group]
+		if dashboard.IsFullGreen(group, map[string]struct{}{}) && !config.All {
 			continue
 		}
+
 		content += fmt.Sprintf("\n%s\n", group.Name)
+		sort.Slice(monitors, func(i, j int) bool {
+			return monitors[i].Name < monitors[j].Name
+		})
+
 		for _, monitor := range monitors {
 			if monitor.IsFullGreen() && !config.All {
 				continue
 			}
-			content += fmt.Sprintf("%-*s  %s%s\n", length, monitor.Name, monitor.Beats(), xbar)
+			icon := ""
+			switch monitor.analyzeStatus(ignore) {
+			case OK:
+				icon = "👌"
+			case KO:
+				icon = "🔥"
+			case Recovered:
+				icon = "🤔"
+			}
+			nb := countBlockChar(monitor.Beats())
+			pad := 50 - nb
+			if pad < 0 {
+				pad = 0
+			}
+
+			content += fmt.Sprintf("%-*s  %s %-*s%s %s\n", length, monitor.Name, icon, pad, "", monitor.Beats(), xbar)
 			if globalState == KO {
 				continue
 			}
-			monitorStatus := monitor.analyzeStatus()
+			monitorStatus := monitor.analyzeStatus(ignore)
 			if monitorStatus == KO {
 				globalState = KO
 				continue
@@ -104,6 +133,16 @@ func main() {
 			fmt.Println(err)
 		}
 	}
+}
+
+func countBlockChar(s string) int {
+	count := 0
+	for _, r := range s {
+		if r == '█' {
+			count++
+		}
+	}
+	return count
 }
 
 func Error(err error, config Config) {
