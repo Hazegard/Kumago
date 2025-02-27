@@ -120,8 +120,9 @@ type Monitor struct {
 }
 
 func (m *Monitor) analyzeStatus(ignore map[string]struct{}) State {
+	ignored := false
 	if _, ok := ignore[m.Name]; ok {
-		return OK
+		ignored = true
 	}
 	n := len(m.Status)
 	if n == 0 {
@@ -133,6 +134,9 @@ func (m *Monitor) analyzeStatus(ignore map[string]struct{}) State {
 		return Recovered
 	}
 	if m.Status[n-1].Status == KO {
+		if ignored {
+			return Recovered
+		}
 		return KO
 	}
 	for i := len(m.Status) - 1; i >= 0; i-- {
