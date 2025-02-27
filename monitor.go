@@ -119,25 +119,25 @@ type Monitor struct {
 	Status []Status
 }
 
-func (m *Monitor) analyzeStatus(ignore map[string]struct{}) State {
+func (m *Monitor) analyzeStatus(ignore map[string]struct{}) (State, State) {
 	ignored := false
 	if _, ok := ignore[m.Name]; ok {
 		ignored = true
 	}
 	n := len(m.Status)
 	if n == 0 {
-		return OK
+		return OK, OK
 	}
 
 	// Check if status recovered
 	if m.Status[n-1].Status == Recovered {
-		return Recovered
+		return Recovered, Recovered
 	}
 	if m.Status[n-1].Status == KO {
 		if ignored {
-			return Recovered
+			return Recovered, OK
 		}
-		return KO
+		return KO, KO
 	}
 	for i := len(m.Status) - 1; i >= 0; i-- {
 		if i == len(m.Status)-1 {
@@ -145,10 +145,10 @@ func (m *Monitor) analyzeStatus(ignore map[string]struct{}) State {
 			continue
 		}
 		if m.Status[i].Status == KO {
-			return Recovered
+			return Recovered, Recovered
 		}
 	}
-	return OK
+	return OK, OK
 }
 
 func (m *Monitor) HasResolvedDowntime() bool {

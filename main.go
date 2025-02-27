@@ -80,7 +80,8 @@ func main() {
 				continue
 			}
 			icon := ""
-			switch monitor.analyzeStatus(ignore) {
+			localStatus, globalStatus := monitor.analyzeStatus(ignore)
+			switch localStatus {
 			case OK:
 				icon = "👌"
 			case KO:
@@ -98,12 +99,12 @@ func main() {
 			if globalState == KO {
 				continue
 			}
-			monitorStatus := monitor.analyzeStatus(ignore)
-			if monitorStatus == KO {
+
+			if globalStatus == KO {
 				globalState = KO
 				continue
 			}
-			if monitorStatus == Recovered && globalState == OK {
+			if globalStatus == Recovered && globalState == OK {
 				globalState = Recovered
 				continue
 			}
