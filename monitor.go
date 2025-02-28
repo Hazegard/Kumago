@@ -133,6 +133,9 @@ func (m *Monitor) analyzeStatus(ignore map[string]struct{}) (State, State) {
 
 	// Check if status recovered
 	if m.Status[n-1].Status == Recovered {
+		if ignored {
+			return Recovered, OK
+		}
 		return Recovered, Recovered
 	}
 	if m.Status[n-1].Status == KO {
@@ -147,6 +150,9 @@ func (m *Monitor) analyzeStatus(ignore map[string]struct{}) (State, State) {
 			continue
 		}
 		if m.Status[i].Status == KO {
+			if ignored {
+				return Recovered, OK
+			}
 			return Recovered, Recovered
 		}
 	}
