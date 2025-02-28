@@ -37,6 +37,8 @@ var (
 		"sslipio - Docker":                                    struct{}{},
 		"SSLIP DNS subdomain - X.X.X.X.rebind.newtechjob.com": struct{}{},
 		"SSLIP DNS subdomain - X.X.X.X.rebind.xmc.ovh":        struct{}{},
+		"SSLIP NS DNS - rebind.xmc.ovh":                       struct{}{},
+		"SSLIP NS DNS - rebind.newtechjob.com":                struct{}{},
 	}
 )
 
