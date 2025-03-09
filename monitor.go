@@ -29,16 +29,16 @@ const (
 
 var (
 	ignore = map[string]struct{}{
-		"updog - Docker":                                      struct{}{},
-		"UpDog - drop.newtechjob.com":                         struct{}{},
-		"python-http - Docker":                                struct{}{},
-		"Python HTTP - py.newtechjob.com":                     struct{}{},
-		"Python HTTPS - py.newtechjob.com":                    struct{}{},
-		"sslipio - Docker":                                    struct{}{},
-		"SSLIP DNS subdomain - X.X.X.X.rebind.newtechjob.com": struct{}{},
-		"SSLIP DNS subdomain - X.X.X.X.rebind.xmc.ovh":        struct{}{},
-		"SSLIP NS DNS - rebind.xmc.ovh":                       struct{}{},
-		"SSLIP NS DNS - rebind.newtechjob.com":                struct{}{},
+		"updog - Docker":                                      {},
+		"UpDog - drop.newtechjob.com":                         {},
+		"python-http - Docker":                                {},
+		"Python HTTP - py.newtechjob.com":                     {},
+		"Python HTTPS - py.newtechjob.com":                    {},
+		"sslipio - Docker":                                    {},
+		"SSLIP DNS subdomain - X.X.X.X.rebind.newtechjob.com": {},
+		"SSLIP DNS subdomain - X.X.X.X.rebind.xmc.ovh":        {},
+		"SSLIP NS DNS - rebind.xmc.ovh":                       {},
+		"SSLIP NS DNS - rebind.newtechjob.com":                {},
 	}
 )
 
