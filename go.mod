@@ -5,6 +5,7 @@ go 1.24
 require (
 	github.com/alecthomas/kong v1.8.1
 	github.com/gen2brain/beeep v0.0.0-20240516210008-9c006672e7f4
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

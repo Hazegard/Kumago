@@ -1,0 +1,7 @@
+all: false
+xbar: false
+notify: false
+url: "https://status.example.com"
+ignore-list:
+  - "Name 1"
+  - "APP Name 2"

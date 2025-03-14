@@ -1,38 +1,64 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"github.com/alecthomas/kong"
 	"github.com/gen2brain/beeep"
+	"gopkg.in/yaml.v3"
+	"io"
+	"net/url"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 )
 
-const URL = "https://status.xmc.ovh"
+const APP_NAME = "kumago"
 
 type Config struct {
-	All           bool   `help:"Show all statuses" default:"false"`
-	Xbar          bool   `help:"Show Xbar statuses" default:"false"`
-	Notify        bool   `help:"Show notify statuses" default:"false"`
-	DashboardPage string `help:"Dashboard page" default:"all" arg:""`
+	All           bool     `help:"Show all statuses" default:"false"`
+	Xbar          bool     `help:"Show Xbar statuses" default:"false"`
+	Notify        bool     `help:"Show notify statuses" default:"false"`
+	Url           *url.URL `help:"Kuma URL" default:"" short:"u"`
+	DashboardPage string   `help:"Dashboard page" default:"all" arg:""`
+	IgnoreList    []string `help:"Ignore list" short:"i"`
 }
 
 func main() {
 	config := Config{}
-	_ = kong.Parse(&config)
+	dir, err := os.Getwd()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 
-	if !CheckAvailability() {
+	configSearchDir := []string{
+		filepath.Join(dir, strings.ToLower(APP_NAME)+".yaml"),
+	}
+	home, err := os.UserHomeDir()
+	if err == nil {
+		homeConfig := filepath.Join(home, ".config", strings.ToLower(APP_NAME), strings.ToLower(APP_NAME)+".yaml")
+		configSearchDir = append(configSearchDir, homeConfig)
+	}
+	kongOptions := []kong.Option{
+		kong.Name(APP_NAME),
+		kong.UsageOnError(),
+		kong.Configuration(YAML, configSearchDir...),
+		kong.DefaultEnvars(strings.ToUpper(APP_NAME)),
+	}
+	_ = kong.Parse(&config, kongOptions...)
+	if !CheckAvailability(config.Url) {
 		Error(fmt.Errorf("Dashboard unavailable: not connected to kuma"), config)
 		return
 	}
-	titles, err := GetTitleDict(config.DashboardPage)
+	titles, err := GetTitleDict(config.DashboardPage, config.Url)
 	if err != nil {
 		Error(fmt.Errorf("Dashboard unavailable: %s", err), config)
 		return
 	}
 
-	dashboard, err := GetDashboard(config.DashboardPage, titles)
+	dashboard, err := GetDashboard(config.DashboardPage, titles, config.Url)
 	if err != nil {
 		Error(fmt.Errorf("Dashboard unavailable: %s", err), config)
 		return
@@ -81,7 +107,7 @@ func main() {
 				continue
 			}
 			icon := ""
-			localStatus, globalStatus := monitor.analyzeStatus(ignore)
+			localStatus, globalStatus := monitor.analyzeStatus(config.IgnoreList)
 			switch localStatus {
 			case OK:
 				icon = "👌"
@@ -157,4 +183,42 @@ func Error(err error, config Config) {
 		fmt.Println(err)
 	}
 	os.Exit(1)
+}
+
+func YAML(r io.Reader) (kong.Resolver, error) {
+	decoder := yaml.NewDecoder(r)
+	config := map[string]interface{}{}
+	err := decoder.Decode(config)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("YAML agent decode error: %w", err)
+	}
+	return kong.ResolverFunc(func(context *kong.Context, parent *kong.Path, flag *kong.Flag) (interface{}, error) {
+		for _, env := range flag.Envs {
+			_, ok := os.LookupEnv(env)
+			if ok {
+				return nil, nil
+			}
+		}
+		// Build a string path up to this flag.
+		path := []string{}
+		for n := parent.Node(); n != nil && n.Type != kong.ApplicationNode; n = n.Parent {
+			path = append([]string{n.Name}, path...)
+		}
+		path = append(path, flag.Name)
+		path = strings.Split(strings.Join(path, "-"), "-")
+		return find(config, path), nil
+	}), nil
+}
+
+func find(config map[string]interface{}, path []string) interface{} {
+	if len(path) == 0 {
+		return config
+	}
+	for i := 0; i < len(path); i++ {
+		prefix := strings.Join(path[:i+1], "-")
+		if child, ok := config[prefix].(map[string]interface{}); ok {
+			return find(child, path[i+1:])
+		}
+	}
+	return config[strings.Join(path, "-")]
 }
