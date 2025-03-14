@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -46,8 +47,8 @@ type MonitorTitle struct {
 	Type      string `json:"type"`
 }
 
-func CheckAvailability() bool {
-	r, err := http.Head(fmt.Sprintf("%s/dashboard", URL))
+func CheckAvailability(url *url.URL) bool {
+	r, err := http.Head(fmt.Sprintf("%s/dashboard", url))
 	if err != nil {
 		return false
 	}
@@ -59,8 +60,8 @@ func CheckAvailability() bool {
 	return true
 }
 
-func GetTitleDict(dashboardName string) (map[string]MonitorTitle, error) {
-	r, err := http.Get(fmt.Sprintf("%s/status/%s", URL, dashboardName))
+func GetTitleDict(dashboardName string, url *url.URL) (map[string]MonitorTitle, error) {
+	r, err := http.Get(fmt.Sprintf("%s/status/%s", url, dashboardName))
 	if err != nil {
 		return nil, err
 	}
@@ -105,8 +106,8 @@ func GetTitleDict(dashboardName string) (map[string]MonitorTitle, error) {
 	return monitorTitles, nil
 }
 
-func GetDashboard(dashboardName string, titles map[string]MonitorTitle) (HeartBeatList, error) {
-	r, err := http.Get(fmt.Sprintf("%s/api/status-page/heartbeat/%s", URL, dashboardName))
+func GetDashboard(dashboardName string, titles map[string]MonitorTitle, url *url.URL) (HeartBeatList, error) {
+	r, err := http.Get(fmt.Sprintf("%s/api/status-page/heartbeat/%s", url, dashboardName))
 	if err != nil {
 		return HeartBeatList{}, err
 	}

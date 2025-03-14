@@ -27,21 +27,6 @@ const (
 	Recovered
 )
 
-var (
-	ignore = map[string]struct{}{
-		"updog - Docker":                                      {},
-		"UpDog - drop.newtechjob.com":                         {},
-		"python-http - Docker":                                {},
-		"Python HTTP - py.newtechjob.com":                     {},
-		"Python HTTPS - py.newtechjob.com":                    {},
-		"sslipio - Docker":                                    {},
-		"SSLIP DNS subdomain - X.X.X.X.rebind.newtechjob.com": {},
-		"SSLIP DNS subdomain - X.X.X.X.rebind.xmc.ovh":        {},
-		"SSLIP NS DNS - rebind.xmc.ovh":                       {},
-		"SSLIP NS DNS - rebind.newtechjob.com":                {},
-	}
-)
-
 type StatusTime time.Time
 
 func (st *StatusTime) UnmarshalJSON(b []byte) error {
@@ -121,7 +106,11 @@ type Monitor struct {
 	Status []Status
 }
 
-func (m *Monitor) analyzeStatus(ignore map[string]struct{}) (State, State) {
+func (m *Monitor) analyzeStatus(ignoreList []string) (State, State) {
+	var ignore = map[string]struct{}{}
+	for _, ignoreStr := range ignoreList {
+		ignore[ignoreStr] = struct{}{}
+	}
 	ignored := false
 	if _, ok := ignore[m.Name]; ok {
 		ignored = true
