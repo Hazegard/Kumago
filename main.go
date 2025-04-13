@@ -74,27 +74,16 @@ func main() {
 		return groups[i].Name < groups[j].Name
 	})
 
-	content, globalState, downList := Parse(config, groups, dashboard)
-	fmt.Println(content)
+	content, globalState, _ := Parse(config, groups, dashboard)
 
-	for group, heartbeat := range downList {
-		fmt.Println(group.Name)
-		for _, heartbeatItem := range heartbeat {
-			fmt.Println("    " + heartbeatItem.Name)
-		}
+	err = Notify(content, config)
+	if err != nil {
+		fmt.Println(err)
 	}
-
-	Notify(downList, config)
 
 	if globalState == KO {
 
 	}
-	// if config.Notify && globalState == KO {
-	// 	err = beeep.Alert("BEEP", "beep", "beep")
-	// 	if err != nil {
-	// 		fmt.Println(err)
-	// 	}
-	// }
 }
 
 func countBlockChar(s string) int {
@@ -155,23 +144,23 @@ func find(config map[string]interface{}, path []string) interface{} {
 	return config[strings.Join(path, "-")]
 }
 
-func Notify(hb HeartBeatList, c Config) error {
-	if len(hb) == 0 {
-		return nil
-	}
+func Notify(hb Content, c Config) error {
 	if c.NotifyUrl == nil {
-		return nil
+		return fmt.Errorf("no notify url")
 	}
 	err, notifier := NewNotifier(c)
 
 	if err != nil {
 		return err
 	}
-	notifier.Notify(hb)
+	if hb.IsEmpty() && !c.All {
+		return nil
+	}
+	notifier.Notify(hb, c)
 	return nil
 }
 
-func Parse(config Config, groups []Group, dashboard HeartBeatList) (string, State, HeartBeatList) {
+func Parse(config Config, groups []Group, dashboard HeartBeatList) (Content, State, HeartBeatList) {
 
 	globalState := OK
 
@@ -189,7 +178,7 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList) (string, Stat
 		}
 	}
 
-	content := ""
+	content := Content{}
 	xbar := ""
 	if config.Xbar {
 		xbar = " | font=\"FiraCode Nerd Font\""
@@ -200,7 +189,9 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList) (string, Stat
 			continue
 		}
 
-		content += fmt.Sprintf("\n%s\n", group.Name)
+		contentGroup := ParsedGroups{
+			GroupName: group.Name,
+		}
 		sort.Slice(monitors, func(i, j int) bool {
 			return monitors[i].Name < monitors[j].Name
 		})
@@ -229,7 +220,13 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList) (string, Stat
 				pad = 0
 			}
 
-			content += fmt.Sprintf("%-*s  %s %-*s%s %s\n", length, monitor.Name, icon, pad, "", monitor.Beats(), xbar)
+			contentGroup.Monitors = append(contentGroup.Monitors, ParsedMonitor{
+				State:      localStatus,
+				Emoji:      icon,
+				Beats:      fmt.Sprintf("%-*s%s %s\n", pad, "", monitor.Beats(), xbar),
+				EmojiBeats: fmt.Sprintf("%-*s%s %s\n", pad*2, "", monitor.EmojiBeats(), xbar),
+				Name:       fmt.Sprintf("%-*s", length, monitor.Name),
+			})
 			if globalState == KO {
 				continue
 			}
@@ -243,11 +240,10 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList) (string, Stat
 				continue
 			}
 		}
+		content.Content = append(content.Content, contentGroup)
 	}
 
-	content = strings.TrimSpace(content)
-
-	header := ""
+	// header := ""
 	if config.Xbar {
 		icon := "👌"
 		switch globalState {
@@ -258,10 +254,75 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList) (string, Stat
 		case Recovered:
 			icon = "🤔"
 		}
-		header = fmt.Sprintf("%s\n---", icon)
-		content = fmt.Sprintf("%s\n%s\nRefresh... | refresh=true", header, content)
+		content.Header = fmt.Sprintf("%s\n---", icon)
+		content.Footer = "Refresh... | refresh=true"
 	}
 
 	//fmt.Println(content)
 	return content, globalState, downList
+}
+
+type Content struct {
+	Header  string
+	Footer  string
+	Content []ParsedGroups
+}
+
+func (c *Content) IsEmpty() bool {
+	for _, group := range c.Content {
+		if !group.IsEmpty() {
+			return false
+		}
+	}
+	return true
+}
+
+func (c *Content) String() string {
+	if c.IsEmpty() {
+		return ""
+	}
+	sb := strings.Builder{}
+	if c.Header != "" {
+		sb.WriteString(c.Header)
+		sb.WriteString("\n")
+	}
+	for _, group := range c.Content {
+		sb.WriteString(group.GroupName)
+		sb.WriteString("\n")
+		for _, monitor := range group.Monitors {
+			sb.WriteString(monitor.Name)
+			sb.WriteString(" ")
+			sb.WriteString(monitor.Emoji)
+			sb.WriteString(monitor.Beats)
+		}
+		sb.WriteString("\n")
+
+	}
+
+	if c.Footer != "" {
+		sb.WriteString(c.Footer)
+	}
+	return strings.TrimSpace(sb.String())
+}
+
+type ParsedGroups struct {
+	GroupName string
+	Monitors  []ParsedMonitor
+}
+
+func (group ParsedGroups) IsEmpty() bool {
+	for _, monitor := range group.Monitors {
+		if monitor.State == KO {
+			return false
+		}
+	}
+	return true
+}
+
+type ParsedMonitor struct {
+	State      State
+	Emoji      string
+	Beats      string
+	EmojiBeats string
+	Name       string
 }
