@@ -52,6 +52,17 @@ type Status struct {
 	Ping   float64    `json:"ping"`
 }
 
+func (s *Status) EmojiBeat() string {
+	switch s.Status {
+	case OK:
+		return "🟩"
+	case Recovered:
+		return "🟧" //🟨
+	case KO:
+		return "🟥"
+	}
+	return " "
+}
 func (st *Status) Beat() string {
 	color := 0
 	switch st.Status {
@@ -64,7 +75,7 @@ func (st *Status) Beat() string {
 	default:
 		color = colors["White"]
 	}
-	return fmt.Sprintf("\033[%dm%s\033[0m", color, "█")
+	return fmt.Sprintf("\u001b[%dm%s\u001b[0m", color, "█")
 }
 
 func (st *Status) HasDowntime() bool {
@@ -177,6 +188,14 @@ func (m *Monitor) Beats() string {
 	}
 	return sb.String()
 }
+func (m *Monitor) EmojiBeats() string {
+	sb := strings.Builder{}
+	for _, status := range m.Status {
+		sb.WriteString(status.EmojiBeat())
+	}
+	return sb.String()
+}
+
 func (m *Monitor) IsFullGreen() bool {
 	for _, status := range m.Status {
 		if status.Status != 1 {

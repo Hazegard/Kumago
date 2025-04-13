@@ -40,19 +40,33 @@ func NewNotifier(c Config) (error, *Notifier) {
 
 }
 
-func (n *Notifier) Notify(heartBeat HeartBeatList) {
-	for group, heartBeats := range heartBeat {
-		params := &types.Params{
-			"title": group.Name,
-			"Color": "0xDC143C",
-		}
-		messages := []string{}
-		for _, heartBeat := range heartBeats {
-			messages = append(messages, heartBeat.Name)
-		}
-
-		for _, sender := range n.senders {
-			sender.Send(strings.Join(messages, "\n"), params)
-		}
+func (n *Notifier) Notify(content Content, config Config) {
+	if content.IsEmpty() {
+		return
 	}
+	params := &types.Params{
+		//"title": "TEST",
+		"Color": "0xDC143C",
+	}
+	message := strings.Builder{}
+	message.WriteString("# Down status\n")
+	for _, group := range content.Content {
+		if group.IsEmpty() && !config.All {
+			continue
+		}
+		message.WriteString(fmt.Sprintf("\n### %s\n```ansi\n", group.GroupName))
+		for _, monitor := range group.Monitors {
+			if monitor.State != KO && !config.All {
+				continue
+			}
+			message.WriteString(fmt.Sprintf("%s %s\n%s", monitor.Emoji, monitor.Name, monitor.EmojiBeats))
+		}
+		message.WriteString("```\n")
+	}
+
+	msg := message.String()
+	for _, sender := range n.senders {
+		sender.Send(msg, params)
+	}
+	fmt.Print(msg)
 }
