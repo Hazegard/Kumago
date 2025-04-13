@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/alecthomas/kong"
-	"github.com/gen2brain/beeep"
 	"gopkg.in/yaml.v3"
 	"io"
 	"net/url"
@@ -23,6 +22,7 @@ type Config struct {
 	Url           *url.URL `help:"Kuma URL" default:"" short:"u"`
 	DashboardPage string   `help:"Dashboard page" default:"all" arg:""`
 	IgnoreList    []string `help:"Ignore list" short:"i"`
+	NotifyUrl     []string `help:"Discord URL" default:""`
 }
 
 func main() {
@@ -38,8 +38,10 @@ func main() {
 	}
 	home, err := os.UserHomeDir()
 	if err == nil {
-		homeConfig := filepath.Join(home, ".config", strings.ToLower(APP_NAME), strings.ToLower(APP_NAME)+".yaml")
-		configSearchDir = append(configSearchDir, homeConfig)
+		configSearchDir = append(configSearchDir,
+			filepath.Join(home, ".config", strings.ToLower(APP_NAME), strings.ToLower(APP_NAME)+".yaml"),
+			filepath.Join(home, ".config", strings.ToLower(APP_NAME)+".yaml"),
+		)
 	}
 	kongOptions := []kong.Option{
 		kong.Name(APP_NAME),
@@ -64,26 +66,6 @@ func main() {
 		return
 	}
 
-	length := 0
-	for _, monitors := range dashboard {
-		for _, monitor := range monitors {
-			if monitor.IsFullGreen() && !config.All {
-				continue
-			}
-			l := len(monitor.Name)
-			if l > length {
-				length = l
-			}
-		}
-	}
-	content := ""
-	xbar := ""
-	if config.Xbar {
-		xbar = " | font=\"FiraCode Nerd Font\""
-	}
-
-	globalState := OK
-
 	groups := []Group{}
 	for group := range dashboard {
 		groups = append(groups, group)
@@ -91,78 +73,28 @@ func main() {
 	sort.Slice(groups, func(i, j int) bool {
 		return groups[i].Name < groups[j].Name
 	})
-	for _, group := range groups {
-		monitors := dashboard[group]
-		if dashboard.IsFullGreen(group, map[string]struct{}{}) && !config.All {
-			continue
-		}
 
-		content += fmt.Sprintf("\n%s\n", group.Name)
-		sort.Slice(monitors, func(i, j int) bool {
-			return monitors[i].Name < monitors[j].Name
-		})
-
-		for _, monitor := range monitors {
-			if monitor.IsFullGreen() && !config.All {
-				continue
-			}
-			icon := ""
-			localStatus, globalStatus := monitor.analyzeStatus(config.IgnoreList)
-			switch localStatus {
-			case OK:
-				icon = "👌"
-			case KO:
-				icon = "🔥"
-			case Recovered:
-				icon = "🤔"
-			}
-			nb := countBlockChar(monitor.Beats())
-			pad := 50 - nb
-			if pad < 0 {
-				pad = 0
-			}
-
-			content += fmt.Sprintf("%-*s  %s %-*s%s %s\n", length, monitor.Name, icon, pad, "", monitor.Beats(), xbar)
-			if globalState == KO {
-				continue
-			}
-
-			if globalStatus == KO {
-				globalState = KO
-				continue
-			}
-			if globalStatus == Recovered && globalState == OK {
-				globalState = Recovered
-				continue
-			}
-		}
-	}
-
-	content = strings.TrimSpace(content)
-
-	header := ""
-	if config.Xbar {
-		icon := "👌"
-		switch globalState {
-		case KO:
-			icon = "🔥"
-		case OK:
-			icon = "👌"
-		case Recovered:
-			icon = "🤔"
-		}
-		header = fmt.Sprintf("%s\n---", icon)
-		content = fmt.Sprintf("%s\n%s\nRefresh... | refresh=true", header, content)
-	}
-
+	content, globalState, downList := Parse(config, groups, dashboard)
 	fmt.Println(content)
 
-	if config.Notify && globalState == KO {
-		err = beeep.Alert("BEEP", "beep", "beep")
-		if err != nil {
-			fmt.Println(err)
+	for group, heartbeat := range downList {
+		fmt.Println(group.Name)
+		for _, heartbeatItem := range heartbeat {
+			fmt.Println("    " + heartbeatItem.Name)
 		}
 	}
+
+	Notify(downList, config)
+
+	if globalState == KO {
+
+	}
+	// if config.Notify && globalState == KO {
+	// 	err = beeep.Alert("BEEP", "beep", "beep")
+	// 	if err != nil {
+	// 		fmt.Println(err)
+	// 	}
+	// }
 }
 
 func countBlockChar(s string) int {
@@ -221,4 +153,115 @@ func find(config map[string]interface{}, path []string) interface{} {
 		}
 	}
 	return config[strings.Join(path, "-")]
+}
+
+func Notify(hb HeartBeatList, c Config) error {
+	if len(hb) == 0 {
+		return nil
+	}
+	if c.NotifyUrl == nil {
+		return nil
+	}
+	err, notifier := NewNotifier(c)
+
+	if err != nil {
+		return err
+	}
+	notifier.Notify(hb)
+	return nil
+}
+
+func Parse(config Config, groups []Group, dashboard HeartBeatList) (string, State, HeartBeatList) {
+
+	globalState := OK
+
+	downList := HeartBeatList{}
+	length := 0
+	for _, monitors := range dashboard {
+		for _, monitor := range monitors {
+			if monitor.IsFullGreen() && !config.All {
+				continue
+			}
+			l := len(monitor.Name)
+			if l > length {
+				length = l
+			}
+		}
+	}
+
+	content := ""
+	xbar := ""
+	if config.Xbar {
+		xbar = " | font=\"FiraCode Nerd Font\""
+	}
+	for _, group := range groups {
+		monitors := dashboard[group]
+		if dashboard.IsFullGreen(group, map[string]struct{}{}) && !config.All {
+			continue
+		}
+
+		content += fmt.Sprintf("\n%s\n", group.Name)
+		sort.Slice(monitors, func(i, j int) bool {
+			return monitors[i].Name < monitors[j].Name
+		})
+
+		for _, monitor := range monitors {
+			if monitor.IsFullGreen() && !config.All {
+				continue
+			}
+			icon := ""
+			localStatus, globalStatus := monitor.analyzeStatus(config.IgnoreList)
+			switch localStatus {
+			case OK:
+				icon = "👌"
+			case KO:
+				icon = "🔥"
+			case Recovered:
+				icon = "🤔"
+			}
+			if localStatus == KO /*|| localStatus == Recovered*/ {
+				//				downList[group] = []Monitor{}
+				downList[group] = append(downList[group], monitor)
+			}
+			nb := countBlockChar(monitor.Beats())
+			pad := 50 - nb
+			if pad < 0 {
+				pad = 0
+			}
+
+			content += fmt.Sprintf("%-*s  %s %-*s%s %s\n", length, monitor.Name, icon, pad, "", monitor.Beats(), xbar)
+			if globalState == KO {
+				continue
+			}
+
+			if globalStatus == KO {
+				globalState = KO
+				continue
+			}
+			if globalStatus == Recovered && globalState == OK {
+				globalState = Recovered
+				continue
+			}
+		}
+	}
+
+	content = strings.TrimSpace(content)
+
+	header := ""
+	if config.Xbar {
+		icon := "👌"
+		switch globalState {
+		case KO:
+			icon = "🔥"
+		case OK:
+			icon = "👌"
+		case Recovered:
+			icon = "🤔"
+		}
+		header = fmt.Sprintf("%s\n---", icon)
+		content = fmt.Sprintf("%s\n%s\nRefresh... | refresh=true", header, content)
+	}
+
+	//fmt.Println(content)
+	return content, globalState, downList
 }
