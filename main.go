@@ -20,7 +20,7 @@ type Config struct {
 	Xbar          bool     `help:"Show Xbar statuses" default:"false"`
 	Notify        bool     `help:"Show notify statuses" default:"false"`
 	Url           *url.URL `help:"Kuma URL" default:"" short:"u"`
-	DashboardPage string   `help:"Dashboard page" default:"all" arg:""`
+	DashboardPage []string `help:"Dashboard page" default:"all" arg:""`
 	IgnoreList    []string `help:"Ignore list" short:"i"`
 	NotifyUrl     []string `help:"Discord URL" default:""`
 }
@@ -54,36 +54,47 @@ func main() {
 		Error(fmt.Errorf("Dashboard unavailable: not connected to kuma"), config)
 		return
 	}
-	titles, err := GetTitleDict(config.DashboardPage, config.Url)
-	if err != nil {
-		Error(fmt.Errorf("Dashboard unavailable: %s", err), config)
+
+	for _, dashboard := range config.DashboardPage {
+		titles, err := GetTitleDict(dashboard, config.Url)
+		if err != nil {
+			Error(fmt.Errorf("Dashboard unavailable: %s", err), config)
+			return
+		}
+
+		dashboard, err := GetDashboard(dashboard, titles, config.Url)
+		if err != nil {
+			Error(fmt.Errorf("Dashboard unavailable: %s", err), config)
+			return
+		}
+
+		groups := []Group{}
+		for group := range dashboard {
+			groups = append(groups, group)
+		}
+		sort.Slice(groups, func(i, j int) bool {
+			return groups[i].Name < groups[j].Name
+		})
+
+		content, globalState, _ := Parse(config, groups, dashboard)
+
+		PrintContent(config, content)
+		err = Notify(content, config)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		if globalState == KO {
+
+		}
+	}
+}
+
+func PrintContent(config Config, content Content) {
+	if content.IsEmpty() && !config.All {
 		return
 	}
-
-	dashboard, err := GetDashboard(config.DashboardPage, titles, config.Url)
-	if err != nil {
-		Error(fmt.Errorf("Dashboard unavailable: %s", err), config)
-		return
-	}
-
-	groups := []Group{}
-	for group := range dashboard {
-		groups = append(groups, group)
-	}
-	sort.Slice(groups, func(i, j int) bool {
-		return groups[i].Name < groups[j].Name
-	})
-
-	content, globalState, _ := Parse(config, groups, dashboard)
-
-	err = Notify(content, config)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	if globalState == KO {
-
-	}
+	fmt.Println(content.String())
 }
 
 func countBlockChar(s string) int {
@@ -278,9 +289,6 @@ func (c *Content) IsEmpty() bool {
 }
 
 func (c *Content) String() string {
-	if c.IsEmpty() {
-		return ""
-	}
 	sb := strings.Builder{}
 	if c.Header != "" {
 		sb.WriteString(c.Header)
