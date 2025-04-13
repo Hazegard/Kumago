@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -21,10 +23,36 @@ var (
 
 type State int
 
+func (s *State) Min(t State) State {
+	if *s > t {
+		return t
+	}
+	return *s
+}
+
+func (s *State) UnmarshalJSON(data []byte) error {
+	var value int
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	switch value {
+	case 0:
+		*s = KO
+	case 1:
+		*s = OK
+	case 2:
+		*s = Recovered
+	default:
+		return errors.New("invalid state value")
+	}
+
+	return nil
+}
+
 const (
 	KO State = iota
-	OK
 	Recovered
+	OK
 )
 
 type StatusTime time.Time
@@ -79,7 +107,7 @@ func (st *Status) Beat() string {
 }
 
 func (st *Status) HasDowntime() bool {
-	return st.Status == 0
+	return st.Status == KO
 }
 
 type KumaHeartBeatList map[string][]Status
@@ -103,7 +131,7 @@ func (hbl *HeartBeatList) IsFullGreen(group Group, ignore map[string]struct{}) b
 			continue
 		}
 		for _, status := range monitor.Status {
-			if status.Status != 1 {
+			if status.Status != OK {
 				return false
 			}
 		}
@@ -198,7 +226,7 @@ func (m *Monitor) EmojiBeats() string {
 
 func (m *Monitor) IsFullGreen() bool {
 	for _, status := range m.Status {
-		if status.Status != 1 {
+		if status.Status != OK {
 			return false
 		}
 	}

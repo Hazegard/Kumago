@@ -7,6 +7,13 @@ import (
 	"github.com/containrrr/shoutrrr/pkg/router"
 	"github.com/containrrr/shoutrrr/pkg/types"
 	"strings"
+	"time"
+)
+
+const (
+	red    = "0xDC143C"
+	green  = "0x228B22"
+	yellow = "0xFFD700"
 )
 
 // Notifier holds the shoutrrr service used to send discord notification
@@ -14,6 +21,34 @@ type Notifier struct {
 	Urls    []string
 	senders []*router.ServiceRouter
 	debug   bool
+}
+
+func NewColoredStringBuilder() ColoredStringBuilder {
+	return ColoredStringBuilder{
+		Builder: &strings.Builder{},
+		State:   OK,
+	}
+}
+
+type ColoredStringBuilder struct {
+	*strings.Builder
+	State State
+}
+
+func (csb *ColoredStringBuilder) Colorize(s State) {
+	csb.State = csb.State.Min(s)
+}
+
+func (csb *ColoredStringBuilder) Color() string {
+	switch csb.State {
+	case Recovered:
+		return yellow
+	case OK:
+		return green
+	case KO:
+		return red
+	}
+	return ""
 }
 
 // NewNotifier returns the Notifier struct used to send discord notification
@@ -41,16 +76,15 @@ func NewNotifier(c Config) (error, *Notifier) {
 }
 
 func (n *Notifier) Notify(content Content, config Config) {
-	if content.IsEmpty() {
+	webhookLimit := 1990
+	if content.IsEmpty() && !config.All {
 		return
 	}
-	params := &types.Params{
-		//"title": "TEST",
-		"Color": "0xDC143C",
-	}
-	message := strings.Builder{}
-	message.WriteString("# Down status\n")
+
+	var messages []ColoredStringBuilder
+	// message.WriteString("# Down status\n")
 	for _, group := range content.Content {
+		message := NewColoredStringBuilder()
 		if group.IsEmpty() && !config.All {
 			continue
 		}
@@ -59,14 +93,32 @@ func (n *Notifier) Notify(content Content, config Config) {
 			if monitor.State != KO && !config.All {
 				continue
 			}
+			message.Colorize(monitor.State)
+			if message.Len() > webhookLimit {
+				message.WriteString("\n```")
+				messages = append(messages, message)
+				message = NewColoredStringBuilder()
+				message.WriteString("```ansi\n")
+			}
 			message.WriteString(fmt.Sprintf("%s %s\n%s", monitor.Emoji, monitor.Name, monitor.EmojiBeats))
 		}
 		message.WriteString("```\n")
+		messages = append(messages, message)
 	}
 
-	msg := message.String()
-	for _, sender := range n.senders {
-		sender.Send(msg, params)
+	for _, message := range messages {
+		msg := message.String()
+		for _, sender := range n.senders {
+			errs := sender.Send(msg, &types.Params{"Color": message.Color()})
+			if len(errs) > 0 {
+				for _, err := range errs {
+					if err != nil {
+						fmt.Println(err)
+					}
+				}
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
-	fmt.Print(msg)
+
 }
