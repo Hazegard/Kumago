@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -145,7 +146,7 @@ type Monitor struct {
 	Status []Status
 }
 
-func (m *Monitor) analyzeStatus(ignoreList []string) (State, State) {
+func (m *Monitor) analyzeStatus(ignoreList []string, ignoreRegex []*regexp.Regexp) (State, State) {
 	var ignore = map[string]struct{}{}
 	for _, ignoreStr := range ignoreList {
 		ignore[ignoreStr] = struct{}{}
@@ -154,6 +155,14 @@ func (m *Monitor) analyzeStatus(ignoreList []string) (State, State) {
 	if _, ok := ignore[m.Name]; ok {
 		ignored = true
 	}
+
+	for _, regex := range ignoreRegex {
+		if regex.MatchString(m.Name) {
+			ignored = true
+			break
+		}
+	}
+
 	n := len(m.Status)
 	if n == 0 {
 		return OK, OK
