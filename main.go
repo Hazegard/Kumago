@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -16,13 +17,28 @@ import (
 const APP_NAME = "kumago"
 
 type Config struct {
-	All           bool     `help:"Show all statuses" default:"false"`
-	Xbar          bool     `help:"Show Xbar statuses" default:"false"`
-	Notify        bool     `help:"Show notify statuses" default:"false"`
-	Url           *url.URL `help:"Kuma URL" default:"" short:"u"`
-	DashboardPage []string `help:"Dashboard page" default:"all" arg:""`
-	IgnoreList    []string `help:"Ignore list" short:"i"`
-	NotifyUrl     []string `help:"Discord URL" default:""`
+	All             bool             `help:"Show all statuses" default:"false"`
+	Xbar            bool             `help:"Show Xbar statuses" default:"false"`
+	Notify          bool             `help:"Show notify statuses" default:"false"`
+	Url             *url.URL         `help:"Kuma URL" default:"" short:"u"`
+	DashboardPage   []string         `help:"Dashboard page" default:"all" arg:""`
+	IgnoreList      []string         `help:"Ignore list" short:"i"`
+	IgnoreRegexList []string         `help:"Ignore list (regex)" short:"I"`
+	RegexList       []*regexp.Regexp `kong:"-"`
+	NotifyUrl       []string         `help:"Discord URL" default:""`
+}
+
+func (c *Config) Validate() error {
+	var errs []error
+	for _, ignoreStr := range c.IgnoreRegexList {
+		regex, err := regexp.Compile(ignoreStr)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		c.RegexList = append(c.RegexList, regex)
+	}
+	return errors.Join(errs...)
 }
 
 func main() {
@@ -212,7 +228,7 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList) (Content, Sta
 				continue
 			}
 			icon := ""
-			localStatus, globalStatus := monitor.analyzeStatus(config.IgnoreList)
+			localStatus, globalStatus := monitor.analyzeStatus(config.IgnoreList, config.RegexList)
 			switch localStatus {
 			case OK:
 				icon = "👌"
