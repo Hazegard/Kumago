@@ -42,7 +42,7 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	case 1:
 		*s = OK
 	case 2:
-		*s = Recovered
+		*s = Warn
 	default:
 		return errors.New("invalid state value")
 	}
@@ -52,7 +52,7 @@ func (s *State) UnmarshalJSON(data []byte) error {
 
 const (
 	KO State = iota
-	Recovered
+	Warn
 	OK
 )
 
@@ -85,7 +85,7 @@ func (s *Status) EmojiBeat() string {
 	switch s.Status {
 	case OK:
 		return "🟩"
-	case Recovered:
+	case Warn:
 		return "🟧" //🟨
 	case KO:
 		return "🟥"
@@ -99,16 +99,12 @@ func (st *Status) Beat() string {
 		color = colors["Red"]
 	case OK:
 		color = colors["Green"]
-	case Recovered:
+	case Warn:
 		color = colors["Yellow"]
 	default:
 		color = colors["White"]
 	}
 	return fmt.Sprintf("\u001b[%dm%s\u001b[0m", color, "█")
-}
-
-func (st *Status) HasDowntime() bool {
-	return st.Status == KO
 }
 
 type KumaHeartBeatList map[string][]Status
@@ -125,7 +121,7 @@ type Group struct {
 }
 type HeartBeatList map[Group][]Monitor
 
-func (hbl *HeartBeatList) IsFullGreen(group Group, ignore map[string]struct{}) bool {
+func (hbl *HeartBeatList) IsOK(group Group, ignore map[string]struct{}) bool {
 	monitors := (*hbl)[group]
 	for _, monitor := range monitors {
 		if _, ok := ignore[monitor.Name]; ok {
@@ -133,6 +129,35 @@ func (hbl *HeartBeatList) IsFullGreen(group Group, ignore map[string]struct{}) b
 		}
 		for _, status := range monitor.Status {
 			if status.Status != OK {
+				return false
+			}
+		}
+	}
+	return true
+}
+func (hbl *HeartBeatList) IsKO(group Group, ignore map[string]struct{}) bool {
+	monitors := (*hbl)[group]
+	for _, monitor := range monitors {
+		if _, ok := ignore[monitor.Name]; ok {
+			continue
+		}
+		for _, status := range monitor.Status {
+			if status.Status != OK {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (hbl *HeartBeatList) IsWarn(group Group, ignore map[string]struct{}) bool {
+	monitors := (*hbl)[group]
+	for _, monitor := range monitors {
+		if _, ok := ignore[monitor.Name]; ok {
+			continue
+		}
+		for _, status := range monitor.Status {
+			if status.Status != Warn {
 				return false
 			}
 		}
@@ -168,16 +193,16 @@ func (m *Monitor) analyzeStatus(ignoreList []string, ignoreRegex []*regexp.Regex
 		return OK, OK
 	}
 
-	// Check if status recovered
-	if m.Status[n-1].Status == Recovered {
+	// Check if status warn
+	if m.Status[n-1].Status == Warn {
 		if ignored {
-			return Recovered, OK
+			return Warn, OK
 		}
-		return Recovered, Recovered
+		return Warn, Warn
 	}
 	if m.Status[n-1].Status == KO {
 		if ignored {
-			return Recovered, OK
+			return Warn, OK
 		}
 		return KO, KO
 	}
@@ -188,34 +213,12 @@ func (m *Monitor) analyzeStatus(ignoreList []string, ignoreRegex []*regexp.Regex
 		}
 		if m.Status[i].Status == KO {
 			if ignored {
-				return Recovered, OK
+				return Warn, OK
 			}
-			return Recovered, Recovered
+			return Warn, Warn
 		}
 	}
 	return OK, OK
-}
-
-func (m *Monitor) HasResolvedDowntime() bool {
-
-	for i := len(m.Status) - 1; i >= 0; i-- {
-
-	}
-	for _, status := range m.Status {
-		if status.HasDowntime() {
-			return true
-		}
-	}
-	return false
-}
-
-func (m *Monitor) HasDowntime() bool {
-	for _, status := range m.Status {
-		if status.HasDowntime() {
-			return true
-		}
-	}
-	return false
 }
 
 func (m *Monitor) Beats() string {
@@ -233,9 +236,33 @@ func (m *Monitor) EmojiBeats() string {
 	return sb.String()
 }
 
-func (m *Monitor) IsFullGreen() bool {
+func (m *Monitor) IsOK() bool {
 	for _, status := range m.Status {
 		if status.Status != OK {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *Monitor) IsWarn() bool {
+	if len(m.Status) == 0 {
+		return false
+	}
+	if m.Status[len(m.Status)-1].Status == KO || m.Status[len(m.Status)-1].Status == OK {
+		return false
+	}
+	for _, status := range m.Status {
+		if status.Status == Warn || status.Status == KO {
+			return false
+		}
+	}
+	return false
+}
+
+func (m *Monitor) IsKO() bool {
+	for _, status := range m.Status {
+		if status.Status == OK || status.Status == Warn {
 			return false
 		}
 	}

@@ -17,7 +17,7 @@ import (
 const APP_NAME = "kumago"
 
 type Config struct {
-	All             bool             `help:"Show all statuses" default:"false"`
+	Status          []string         `help:"Show statuses" default:"KO,Warn"`
 	Xbar            bool             `help:"Show Xbar statuses" default:"false"`
 	Notify          bool             `help:"Show notify statuses" default:"false"`
 	Url             *url.URL         `help:"Kuma URL" default:"" short:"u"`
@@ -26,6 +26,17 @@ type Config struct {
 	IgnoreRegexList []string         `help:"Ignore list (regex)" short:"I"`
 	RegexList       []*regexp.Regexp `kong:"-"`
 	NotifyUrl       []string         `help:"Discord URL" default:""`
+}
+
+func (c *Config) KeepOk() bool {
+	return ContainsStringFold(c.Status, "all") || ContainsStringFold(c.Status, "ok")
+}
+
+func (c *Config) KeepWarn() bool {
+	return ContainsStringFold(c.Status, "all") || ContainsStringFold(c.Status, "warn")
+}
+func (c *Config) KeepKo() bool {
+	return ContainsStringFold(c.Status, "all") || ContainsStringFold(c.Status, "ko")
 }
 
 func (c *Config) Validate() error {
@@ -94,7 +105,7 @@ func main() {
 
 		content, globalState, _ := Parse(config, groups, dashboard)
 
-		PrintContent(config, content)
+		PrintContent(content)
 		if config.Notify {
 			err = Notify(content, config)
 			if err != nil {
@@ -108,10 +119,7 @@ func main() {
 	}
 }
 
-func PrintContent(config Config, content Content) {
-	if content.IsEmpty() && !config.All {
-		return
-	}
+func PrintContent(content Content) {
 	fmt.Println(content.String())
 }
 
@@ -182,9 +190,6 @@ func Notify(hb Content, c Config) error {
 	if err != nil {
 		return err
 	}
-	if hb.IsEmpty() && !c.All {
-		return nil
-	}
 	notifier.Notify(hb, c)
 	return nil
 }
@@ -197,7 +202,7 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList) (Content, Sta
 	length := 0
 	for _, monitors := range dashboard {
 		for _, monitor := range monitors {
-			if monitor.IsFullGreen() && !config.All {
+			if (monitor.IsOK() && !config.KeepOk()) || monitor.IsWarn() && !config.KeepWarn() || monitor.IsKO() && !config.KeepKo() {
 				continue
 			}
 			l := len(monitor.Name)
@@ -214,9 +219,6 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList) (Content, Sta
 	}
 	for _, group := range groups {
 		monitors := dashboard[group]
-		if dashboard.IsFullGreen(group, map[string]struct{}{}) && !config.All {
-			continue
-		}
 
 		contentGroup := ParsedGroups{
 			GroupName: group.Name,
@@ -226,20 +228,20 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList) (Content, Sta
 		})
 
 		for _, monitor := range monitors {
-			if monitor.IsFullGreen() && !config.All {
-				continue
-			}
 			icon := ""
 			localStatus, globalStatus := monitor.analyzeStatus(config.IgnoreList, config.RegexList)
+			if (localStatus == KO && !config.KeepKo()) || (localStatus == Warn && !config.KeepWarn()) || (localStatus == OK && !config.KeepOk()) {
+				continue
+			}
 			switch localStatus {
 			case OK:
 				icon = "👌"
 			case KO:
 				icon = "🔥"
-			case Recovered:
+			case Warn:
 				icon = "🤔"
 			}
-			if localStatus == KO /*|| localStatus == Recovered*/ {
+			if localStatus == KO /*|| localStatus == Warn*/ {
 				//				downList[group] = []Monitor{}
 				downList[group] = append(downList[group], monitor)
 			}
@@ -264,12 +266,14 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList) (Content, Sta
 				globalState = KO
 				continue
 			}
-			if globalStatus == Recovered && globalState == OK {
-				globalState = Recovered
+			if globalStatus == Warn && globalState == OK {
+				globalState = Warn
 				continue
 			}
 		}
-		content.Content = append(content.Content, contentGroup)
+		if len(contentGroup.Monitors) > 0 {
+			content.Content = append(content.Content, contentGroup)
+		}
 	}
 
 	// header := ""
@@ -280,7 +284,7 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList) (Content, Sta
 			icon = "🔥"
 		case OK:
 			icon = "👌"
-		case Recovered:
+		case Warn:
 			icon = "🤔"
 		}
 		content.Header = fmt.Sprintf("%s\n---", icon)
@@ -295,15 +299,6 @@ type Content struct {
 	Header  string
 	Footer  string
 	Content []ParsedGroups
-}
-
-func (c *Content) IsEmpty() bool {
-	for _, group := range c.Content {
-		if !group.IsEmpty() {
-			return false
-		}
-	}
-	return true
 }
 
 func (c *Content) String() string {
@@ -336,9 +331,27 @@ type ParsedGroups struct {
 	Monitors  []ParsedMonitor
 }
 
-func (group ParsedGroups) IsEmpty() bool {
+func (group ParsedGroups) IsOK() bool {
 	for _, monitor := range group.Monitors {
-		if monitor.State == KO {
+		if monitor.State == KO || monitor.State == Warn {
+			return false
+		}
+	}
+	return true
+}
+
+func (group ParsedGroups) IsKO() bool {
+	for _, monitor := range group.Monitors {
+		if monitor.State == OK || monitor.State == Warn {
+			return false
+		}
+	}
+	return true
+}
+
+func (group ParsedGroups) IsWarn() bool {
+	for _, monitor := range group.Monitors {
+		if monitor.State == KO || monitor.State == OK {
 			return false
 		}
 	}
@@ -351,4 +364,13 @@ type ParsedMonitor struct {
 	Beats      string
 	EmojiBeats string
 	Name       string
+}
+
+func ContainsStringFold(s []string, e string) bool {
+	for _, a := range s {
+		if strings.EqualFold(a, e) {
+			return true
+		}
+	}
+	return false
 }
