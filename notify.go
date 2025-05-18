@@ -41,7 +41,7 @@ func (csb *ColoredStringBuilder) Colorize(s State) {
 
 func (csb *ColoredStringBuilder) Color() string {
 	switch csb.State {
-	case Recovered:
+	case Warn:
 		return yellow
 	case OK:
 		return green
@@ -77,20 +77,17 @@ func NewNotifier(c Config) (error, *Notifier) {
 
 func (n *Notifier) Notify(content Content, config Config) {
 	webhookLimit := 1990
-	if content.IsEmpty() && !config.All {
-		return
-	}
 
 	var messages []ColoredStringBuilder
 	// message.WriteString("# Down status\n")
 	for _, group := range content.Content {
 		message := NewColoredStringBuilder()
-		if group.IsEmpty() && !config.All {
+		if (group.IsOK() && !config.KeepOk()) || (group.IsKO() && !config.KeepKo()) || (group.IsWarn() && !config.KeepWarn()) {
 			continue
 		}
 		message.WriteString(fmt.Sprintf("\n### %s\n```ansi\n", group.GroupName))
 		for _, monitor := range group.Monitors {
-			if monitor.State != KO && !config.All {
+			if monitor.State != KO && !config.KeepOk() {
 				continue
 			}
 			message.Colorize(monitor.State)
