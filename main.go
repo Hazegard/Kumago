@@ -95,9 +95,11 @@ func main() {
 		content, globalState, _ := Parse(config, groups, dashboard)
 
 		PrintContent(config, content)
-		err = Notify(content, config)
-		if err != nil {
-			fmt.Println(err)
+		if config.Notify {
+			err = Notify(content, config)
+			if err != nil {
+				fmt.Println(err)
+			}
 		}
 
 		if globalState == KO {
