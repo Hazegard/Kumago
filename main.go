@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/alecthomas/kong"
+	"github.com/rivo/uniseg"
 	"gopkg.in/yaml.v3"
 	"io"
 	"net/url"
@@ -16,6 +17,58 @@ import (
 
 const APP_NAME = "kumago"
 
+type Symbol struct {
+	TermIcon string `yaml:"ko" default:"█" help:"Symbol used to display a beat"`
+	WarnBeat string `yaml:"ko" default:"yellow" help:"Terminal color used to display a warn beat"`
+	OkBeat   string `yaml:"ko" default:"green" help:"Terminal color used to display an OK beat"`
+	KoBeat   string `yaml:"ko" default:"red" help:"Terminal color used to display a KO beat"`
+
+	Warn  string `yaml:"warn" default:"🤔" help:"Symbol used to indicate a warning state"`
+	Ok    string `yaml:"ok" default:"👌" help:"Symbol used to indicate an OK state"`
+	Ko    string `yaml:"ko" default:"🔥" help:"Symbol used to indicate a KO state"`
+	Error string `yaml:"ko" default:"🏩" help:"Symbol used to indicate an error state"`
+
+	WarnBeatEmoji string `yaml:"ko" default:"🟧" help:"Emoji used to display a warn beat"`
+	OkBeatEmoji   string `yaml:"ko" default:"🟩" help:"Emoji used to display an OK beat"`
+	KoBeatEmoji   string `yaml:"ko" default:"🟥" help:"Emoji used to display a KO beat"`
+}
+
+func (s *Symbol) Get(state State) string {
+	switch state {
+	case OK:
+		return s.Ok
+	case KO:
+		return s.Ko
+	case Warn:
+		return s.Warn
+	}
+	return " "
+}
+
+func (s *Symbol) GetBeat(state State) string {
+	switch state {
+	case OK:
+		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(s.OkBeat)], s.TermIcon)
+	case KO:
+		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(s.KoBeat)], s.TermIcon)
+	case Warn:
+		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(s.WarnBeat)], s.TermIcon)
+	}
+	return " "
+}
+
+func (s *Symbol) GetBeatEmoji(state State) string {
+	switch state {
+	case OK:
+		return s.OkBeatEmoji
+	case KO:
+		return s.KoBeatEmoji
+	case Warn:
+		return s.WarnBeatEmoji
+	}
+	return " "
+}
+
 type Config struct {
 	Status          []string         `help:"Show statuses" default:"KO,Warn"`
 	Xbar            bool             `help:"Show Xbar statuses" default:"false"`
@@ -26,6 +79,9 @@ type Config struct {
 	IgnoreRegexList []string         `help:"Ignore list (regex)" short:"I"`
 	RegexList       []*regexp.Regexp `kong:"-"`
 	NotifyUrl       []string         `help:"Discord URL" default:""`
+	BeatEmoji       bool             `help:"Use emoji" default:"false"`
+	Emoji           bool             `help:"Use emoji" default:"true" negatable:""`
+	Symbol          Symbol           `help:"Symbol" default:"" embed:"" prefix:"icon-"`
 }
 
 func (c *Config) KeepOk() bool {
@@ -48,6 +104,11 @@ func (c *Config) Validate() error {
 			continue
 		}
 		c.RegexList = append(c.RegexList, regex)
+	}
+
+	_, err := StringToRune(c.Symbol.TermIcon)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("invalid term icon (%s): %s", c.Symbol.TermIcon, err))
 	}
 	return errors.Join(errs...)
 }
@@ -82,6 +143,11 @@ func main() {
 		return
 	}
 
+	if !config.Emoji {
+		config.Symbol.Warn = ""
+		config.Symbol.Ko = ""
+		config.Symbol.Ok = ""
+	}
 	for _, dashboard := range config.DashboardPage {
 		titles, err := GetTitleDict(dashboard, config.Url)
 		if err != nil {
@@ -123,19 +189,42 @@ func PrintContent(content Content) {
 	fmt.Println(content.String())
 }
 
-func countBlockChar(s string) int {
+func countChar(s string, c Config) int {
+
 	count := 0
-	for _, r := range s {
-		if r == '█' {
-			count++
+	var (
+		ok   rune
+		ko   rune
+		warn rune
+	)
+	if c.BeatEmoji && c.Emoji {
+		r, _ := StringToRune(c.Symbol.OkBeatEmoji)
+		ok = r
+		r, _ = StringToRune(c.Symbol.KoBeatEmoji)
+		ko = r
+		r, _ = StringToRune(c.Symbol.WarnBeatEmoji)
+		warn = r
+		for _, r := range s {
+			if r == ok || r == ko || r == warn {
+				count++
+			}
 		}
+		return count
+	} else {
+		t, _ := StringToRune(c.Symbol.TermIcon)
+		for _, r := range s {
+			if r == t {
+				count++
+			}
+		}
+		return count
 	}
-	return count
+
 }
 
 func Error(err error, config Config) {
 	if config.Xbar {
-		fmt.Printf("🏩\n---\n")
+		fmt.Printf("%s\n---\n", config.Symbol.Error)
 	}
 	if err != nil {
 		fmt.Println(err)
@@ -217,6 +306,25 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList) (Content, Sta
 	if config.Xbar {
 		xbar = " | font=\"FiraCode Nerd Font\""
 	}
+
+	maxWidth := 0
+
+	for _, group := range groups {
+		monitors := dashboard[group]
+		for _, monitor := range monitors {
+			localStatus, _ := monitor.analyzeStatus(config.IgnoreList, config.RegexList)
+			if (localStatus == KO && !config.KeepKo()) || (localStatus == Warn && !config.KeepWarn()) || (localStatus == OK && !config.KeepOk()) {
+				continue
+			}
+
+			l := uniseg.GraphemeClusterCount(removeANSICodes(monitor.Beats(config)))
+
+			if l > maxWidth {
+				maxWidth = l
+			}
+		}
+	}
+
 	for _, group := range groups {
 		monitors := dashboard[group]
 
@@ -228,34 +336,32 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList) (Content, Sta
 		})
 
 		for _, monitor := range monitors {
-			icon := ""
+			var icon string
 			localStatus, globalStatus := monitor.analyzeStatus(config.IgnoreList, config.RegexList)
 			if (localStatus == KO && !config.KeepKo()) || (localStatus == Warn && !config.KeepWarn()) || (localStatus == OK && !config.KeepOk()) {
 				continue
 			}
-			switch localStatus {
-			case OK:
-				icon = "👌"
-			case KO:
-				icon = "🔥"
-			case Warn:
-				icon = "🤔"
-			}
+			icon = config.Symbol.Get(localStatus)
 			if localStatus == KO /*|| localStatus == Warn*/ {
 				//				downList[group] = []Monitor{}
 				downList[group] = append(downList[group], monitor)
 			}
-			nb := countBlockChar(monitor.Beats())
-			pad := 50 - nb
+			// char, _ := StringToRune(config.Symbol.TermIcon)
+			nb := countChar(monitor.Beats(config), config)
+			//fmt.Println(nb)
+			pad := maxWidth - nb
 			if pad < 0 {
 				pad = 0
+			}
+			if config.BeatEmoji && config.Emoji {
+				pad *= 2
 			}
 
 			contentGroup.Monitors = append(contentGroup.Monitors, ParsedMonitor{
 				State:      localStatus,
 				Emoji:      icon,
-				Beats:      fmt.Sprintf("%-*s%s %s\n", pad, "", monitor.Beats(), xbar),
-				EmojiBeats: fmt.Sprintf("%-*s%s %s\n", pad*2, "", monitor.EmojiBeats(), xbar),
+				Beats:      fmt.Sprintf("%-*s%s %s\n", pad, "", monitor.Beats(config), xbar),
+				EmojiBeats: fmt.Sprintf("%-*s%s %s\n", pad, "", monitor.EmojiBeats(config), xbar),
 				Name:       fmt.Sprintf("%-*s", length, monitor.Name),
 			})
 			if globalState == KO {
@@ -278,15 +384,8 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList) (Content, Sta
 
 	// header := ""
 	if config.Xbar {
-		icon := "👌"
-		switch globalState {
-		case KO:
-			icon = "🔥"
-		case OK:
-			icon = "👌"
-		case Warn:
-			icon = "🤔"
-		}
+		icon := config.Symbol.Get(globalState)
+
 		content.Header = fmt.Sprintf("%s\n---", icon)
 		content.Footer = "Refresh... | refresh=true"
 	}
@@ -373,4 +472,23 @@ func ContainsStringFold(s []string, e string) bool {
 		}
 	}
 	return false
+}
+
+func StringToRune(s string) (rune, error) {
+	if s == "" {
+		return 0, fmt.Errorf("string is empty")
+	}
+
+	runes := []rune(s)
+	if len(runes) != 1 {
+		return 0, fmt.Errorf("string must contain exactly one character")
+	}
+
+	return runes[0], nil
+}
+
+func removeANSICodes(input string) string {
+	// Regex to match ANSI escape sequences
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+	return ansiRegex.ReplaceAllString(input, "")
 }

@@ -5,6 +5,7 @@ go 1.24
 require (
 	github.com/alecthomas/kong v1.8.1
 	github.com/containrrr/shoutrrr v0.8.0
+	github.com/rivo/uniseg v0.4.7
 	gopkg.in/yaml.v3 v3.0.1
 )
 

@@ -87,7 +87,7 @@ func (n *Notifier) Notify(content Content, config Config) {
 		}
 		message.WriteString(fmt.Sprintf("\n### %s\n```ansi\n", group.GroupName))
 		for _, monitor := range group.Monitors {
-			if monitor.State != KO && !config.KeepOk() {
+			if monitor.State == KO && !config.KeepKo() || monitor.State == OK && !config.KeepOk() || monitor.State == Warn && !config.KeepWarn() {
 				continue
 			}
 			message.Colorize(monitor.State)

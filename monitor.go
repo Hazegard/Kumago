@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -11,14 +10,14 @@ import (
 
 var (
 	colors = map[string]int{
-		"Black":   30,
-		"Red":     31,
-		"Green":   32,
-		"Yellow":  33,
-		"Blue":    34,
-		"Magenta": 35,
-		"Cyan":    36,
-		"White":   37,
+		"black":   30,
+		"red":     31,
+		"green":   32,
+		"yellow":  33,
+		"blue":    34,
+		"magenta": 35,
+		"cyan":    36,
+		"white":   37,
 	}
 )
 
@@ -79,32 +78,6 @@ type Status struct {
 	Date   StatusTime `json:"time"`
 	Msg    string     `json:"msg"`
 	Ping   float64    `json:"ping"`
-}
-
-func (s *Status) EmojiBeat() string {
-	switch s.Status {
-	case OK:
-		return "🟩"
-	case Warn:
-		return "🟧" //🟨
-	case KO:
-		return "🟥"
-	}
-	return " "
-}
-func (st *Status) Beat() string {
-	color := 0
-	switch st.Status {
-	case KO:
-		color = colors["Red"]
-	case OK:
-		color = colors["Green"]
-	case Warn:
-		color = colors["Yellow"]
-	default:
-		color = colors["White"]
-	}
-	return fmt.Sprintf("\u001b[%dm%s\u001b[0m", color, "█")
 }
 
 type KumaHeartBeatList map[string][]Status
@@ -221,17 +194,22 @@ func (m *Monitor) analyzeStatus(ignoreList []string, ignoreRegex []*regexp.Regex
 	return OK, OK
 }
 
-func (m *Monitor) Beats() string {
+func (m *Monitor) Beats(c Config) string {
 	sb := strings.Builder{}
 	for _, status := range m.Status {
-		sb.WriteString(status.Beat())
+		if c.BeatEmoji && c.Emoji {
+			sb.WriteString(c.Symbol.GetBeatEmoji(status.Status))
+		} else {
+			sb.WriteString(c.Symbol.GetBeat(status.Status))
+		}
 	}
 	return sb.String()
 }
-func (m *Monitor) EmojiBeats() string {
+
+func (m *Monitor) EmojiBeats(c Config) string {
 	sb := strings.Builder{}
 	for _, status := range m.Status {
-		sb.WriteString(status.EmojiBeat())
+		sb.WriteString(c.Symbol.GetBeatEmoji(status.Status))
 	}
 	return sb.String()
 }
