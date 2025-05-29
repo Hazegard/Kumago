@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -92,7 +94,7 @@ type Group struct {
 	Id   int    `json:"id"`
 	Name string `json:"name"`
 }
-type HeartBeatList map[Group][]Monitor
+type HeartBeatList map[Group][]*Monitor
 
 func (hbl *HeartBeatList) IsOK(group Group, ignore map[string]struct{}) bool {
 	monitors := (*hbl)[group]
@@ -139,59 +141,81 @@ func (hbl *HeartBeatList) IsWarn(group Group, ignore map[string]struct{}) bool {
 }
 
 type Monitor struct {
-	Id     string
-	Name   string
-	Status []Status
+	Id                string
+	Name              string
+	Status            []Status
+	localState        State
+	globalState       State
+	analyzeStatusSync sync.Once
 }
 
 func (m *Monitor) analyzeStatus(ignoreList []string, ignoreRegex []*regexp.Regexp) (State, State) {
-	var ignore = map[string]struct{}{}
-	for _, ignoreStr := range ignoreList {
-		ignore[ignoreStr] = struct{}{}
-	}
-	ignored := false
-	if _, ok := ignore[m.Name]; ok {
-		ignored = true
-	}
-
-	for _, regex := range ignoreRegex {
-		if regex.MatchString(m.Name) {
+	m.analyzeStatusSync.Do(func() {
+		var ignore = map[string]struct{}{}
+		for _, ignoreStr := range ignoreList {
+			ignore[ignoreStr] = struct{}{}
+		}
+		ignored := false
+		if _, ok := ignore[m.Name]; ok {
 			ignored = true
-			break
 		}
-	}
 
-	n := len(m.Status)
-	if n == 0 {
-		return OK, OK
-	}
-
-	// Check if status warn
-	if m.Status[n-1].Status == Warn {
-		if ignored {
-			return Warn, OK
-		}
-		return Warn, Warn
-	}
-	if m.Status[n-1].Status == KO {
-		if ignored {
-			return Warn, OK
-		}
-		return KO, KO
-	}
-	for i := len(m.Status) - 1; i >= 0; i-- {
-		if i == len(m.Status)-1 {
-			// explicitly skip the last element as here it is always OK
-			continue
-		}
-		if m.Status[i].Status == KO {
-			if ignored {
-				return Warn, OK
+		for _, regex := range ignoreRegex {
+			if regex.MatchString(m.Name) {
+				ignored = true
+				break
 			}
-			return Warn, Warn
 		}
-	}
-	return OK, OK
+
+		n := len(m.Status)
+		if n == 0 {
+			m.localState = OK
+			m.globalState = OK
+			return
+		}
+
+		// Check if status warn
+		if m.Status[n-1].Status == Warn {
+			if ignored {
+				m.localState = Warn
+				m.globalState = OK
+				return
+			}
+			m.localState = Warn
+			m.globalState = Warn
+			return
+		}
+		if m.Status[n-1].Status == KO {
+			if ignored {
+				m.localState = Warn
+				m.globalState = OK
+				return
+			}
+			m.localState = KO
+			m.globalState = KO
+			return
+		}
+		for i := len(m.Status) - 1; i >= 0; i-- {
+			if i == len(m.Status)-1 {
+				// explicitly skip the last element as here it is always OK
+				continue
+			}
+			if m.Status[i].Status == KO {
+				if ignored {
+					m.localState = Warn
+					m.globalState = OK
+					return
+				}
+				m.localState = Warn
+				m.globalState = Warn
+				return
+			}
+		}
+		m.localState = OK
+		m.globalState = OK
+	})
+
+	return m.localState, m.globalState
 }
 
 func (m *Monitor) Beats(c Config) string {
@@ -200,10 +224,24 @@ func (m *Monitor) Beats(c Config) string {
 		if c.BeatEmoji && c.Emoji {
 			sb.WriteString(c.Symbol.GetBeatEmoji(status.Status))
 		} else {
-			sb.WriteString(c.Symbol.GetBeat(status.Status))
+			sb.WriteString(c.Symbol.GetBeat(status.Status, c.Color))
 		}
 	}
 	return sb.String()
+}
+
+func (m *Monitor) GetName(length int, c Config) string {
+	color := ""
+	status, _ := m.analyzeStatus(c.IgnoreList, c.RegexList)
+	switch status {
+	case OK:
+		color = c.Color.OkBeat
+	case Warn:
+		color = c.Color.WarnBeat
+	case KO:
+		color = c.Color.KoBeat
+	}
+	return fmt.Sprintf("\u001B[%dm%-*s\u001B[0m", colors[color], length, m.Name)
 }
 
 func (m *Monitor) EmojiBeats(c Config) string {

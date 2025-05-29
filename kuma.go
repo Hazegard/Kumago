@@ -130,7 +130,7 @@ func GetDashboard(dashboardName string, titles map[string]MonitorTitle, url *url
 			Id:   titles[monitorId].GroupId,
 			Name: titles[monitorId].GroupName,
 		}
-		monitor := Monitor{
+		monitor := &Monitor{
 			Id:     monitorId,
 			Name:   strings.TrimSpace(titles[monitorId].Name),
 			Status: status,
