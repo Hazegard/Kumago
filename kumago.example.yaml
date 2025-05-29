@@ -1,7 +1,32 @@
-all: false
+status:
+  - KO
+  - Warn
 xbar: false
 notify: false
 url: "https://status.example.com"
 ignore-list:
   - "Name 1"
   - "APP Name 2"
+ignore-regex-list:
+  - "(?i)Name 2"
+
+notify-url: discord://URL?splitlines=no
+
+beat: true
+beat-emoji: false
+emoji: true
+
+color-warn-beat: yellow
+color-ok-beat: green
+color-ko-beat: red
+
+icon-term-icon: █
+
+icon-warn: 🤔
+icon-ok: 👌
+icon-ko: 🔥
+icon-error: 🏩
+
+icon-warn-beat-emoji: 🟧
+icon-ok-beat-emoji: 🟩
+icon-ko-beat-emoji: 🟥

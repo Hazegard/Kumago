@@ -18,18 +18,18 @@ import (
 const APP_NAME = "kumago"
 
 type Color struct {
-	WarnBeat string `yaml:"ko" default:"yellow" help:"Terminal color used to display a warn beat"`
-	OkBeat   string `yaml:"ko" default:"green" help:"Terminal color used to display an OK beat"`
-	KoBeat   string `yaml:"ko" default:"red" help:"Terminal color used to display a KO beat"`
+	WarnBeat string `yaml:"ko" default:"yellow" help:"Terminal color used to display a warn beat (ANSI color name)"`
+	OkBeat   string `yaml:"ko" default:"green" help:"Terminal color used to display an OK beat (ANSI color name)"`
+	KoBeat   string `yaml:"ko" default:"red" help:"Terminal color used to display a KO beat (ANSI color name)"`
 }
 
 type Symbol struct {
 	TermIcon string `yaml:"ko" default:"█" help:"Symbol used to display a beat"`
 
-	Warn  string `yaml:"warn" default:"🤔" help:"Symbol used to indicate a warning state"`
-	Ok    string `yaml:"ok" default:"👌" help:"Symbol used to indicate an OK state"`
-	Ko    string `yaml:"ko" default:"🔥" help:"Symbol used to indicate a KO state"`
-	Error string `yaml:"ko" default:"🏩" help:"Symbol used to indicate an error state"`
+	Warn  string `yaml:"warn" default:"🤔" help:"Emoji used to indicate a warning state"`
+	Ok    string `yaml:"ok" default:"👌" help:"Emoji used to indicate an OK state"`
+	Ko    string `yaml:"ko" default:"🔥" help:"Emoji used to indicate a KO state"`
+	Error string `yaml:"ko" default:"🏩" help:"Emoji used to indicate an error state"`
 
 	WarnBeatEmoji string `yaml:"ko" default:"🟧" help:"Emoji used to display a warn beat"`
 	OkBeatEmoji   string `yaml:"ko" default:"🟩" help:"Emoji used to display an OK beat"`
@@ -73,18 +73,18 @@ func (s *Symbol) GetBeatEmoji(state State) string {
 }
 
 type Config struct {
-	Status          []string         `help:"Show statuses" default:"KO,Warn"`
-	Xbar            bool             `help:"Show Xbar statuses" default:"false"`
-	Notify          bool             `help:"Show notify statuses" default:"false"`
+	Status          []string         `help:"Status to display (OK,KO,Warn)" default:"KO,Warn"`
+	Xbar            bool             `help:"Enable Xbar mode" default:"false"`
+	Notify          bool             `help:"Send notification" default:"false"`
 	Url             *url.URL         `help:"Kuma URL" default:"" short:"u"`
-	DashboardPage   []string         `help:"Dashboard page" default:"all" arg:""`
+	DashboardPage   []string         `help:"Dashboard pages to parse" default:"all" arg:""`
 	IgnoreList      []string         `help:"Ignore list" short:"i"`
 	IgnoreRegexList []string         `help:"Ignore list (regex)" short:"I"`
 	RegexList       []*regexp.Regexp `kong:"-"`
-	NotifyUrl       []string         `help:"Discord URL" default:""`
+	NotifyUrl       []string         `help:"Notification URL" default:""`
 	Beat            bool             `help:"Show/hide heartbeat" negatable:"" default:"true"`
-	BeatEmoji       bool             `help:"Use emoji" default:"false"`
-	Emoji           bool             `help:"Use emoji" default:"true" negatable:""`
+	BeatEmoji       bool             `help:"Use emoji in beats" default:"false"`
+	Emoji           bool             `help:"Show synthesis emoji" default:"true" negatable:""`
 	Color           Color            `help:"Color" default:"" embed:"" prefix:"color-"`
 	Symbol          Symbol           `help:"Symbol" default:"" embed:"" prefix:"icon-"`
 }
