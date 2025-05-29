@@ -219,6 +219,9 @@ func (m *Monitor) analyzeStatus(ignoreList []string, ignoreRegex []*regexp.Regex
 }
 
 func (m *Monitor) Beats(c Config) string {
+	if !c.Beat {
+		return ""
+	}
 	sb := strings.Builder{}
 	for _, status := range m.Status {
 		if c.BeatEmoji && c.Emoji {
@@ -240,6 +243,9 @@ func (m *Monitor) GetName(length int, c Config) string {
 		color = c.Color.WarnBeat
 	case KO:
 		color = c.Color.KoBeat
+	}
+	if !c.Beat && !c.Emoji {
+		length = 0
 	}
 	return fmt.Sprintf("\u001B[%dm%-*s\u001B[0m", colors[color], length, m.Name)
 }

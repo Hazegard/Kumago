@@ -82,6 +82,7 @@ type Config struct {
 	IgnoreRegexList []string         `help:"Ignore list (regex)" short:"I"`
 	RegexList       []*regexp.Regexp `kong:"-"`
 	NotifyUrl       []string         `help:"Discord URL" default:""`
+	Beat            bool             `help:"Show/hide heartbeat" negatable:"" default:"true"`
 	BeatEmoji       bool             `help:"Use emoji" default:"false"`
 	Emoji           bool             `help:"Use emoji" default:"true" negatable:""`
 	Color           Color            `help:"Color" default:"" embed:"" prefix:"color-"`
@@ -201,6 +202,9 @@ func countChar(s string, c Config) int {
 		ko   rune
 		warn rune
 	)
+	if !c.Beat {
+		return 0
+	}
 	if c.BeatEmoji && c.Emoji {
 		r, _ := StringToRune(c.Symbol.OkBeatEmoji)
 		ok = r
