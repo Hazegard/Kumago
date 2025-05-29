@@ -29,28 +29,29 @@ As well as discord notifications
 Usage: kumago [<dashboard-page> ...] [flags]
 
 Arguments:
-  [<dashboard-page> ...]    Dashboard page
+  [<dashboard-page> ...]    Dashboard pages to parse
 
 Flags:
   -h, --help                                       Show context-sensitive help.
-      --status=KO,Warn,...                         Show statuses ($KUMAGO_STATUS)
-      --xbar                                       Show Xbar statuses ($KUMAGO_XBAR)
-      --notify                                     Show notify statuses ($KUMAGO_NOTIFY)
+      --status=KO,Warn,...                         Status to display (OK,KO,Warn) ($KUMAGO_STATUS)
+      --xbar                                       Enable Xbar mode ($KUMAGO_XBAR)
+      --notify                                     Send notification ($KUMAGO_NOTIFY)
   -u, --url=                                       Kuma URL ($KUMAGO_URL)
   -i, --ignore-list=IGNORE-LIST,...                Ignore list ($KUMAGO_IGNORE_LIST)
   -I, --ignore-regex-list=IGNORE-REGEX-LIST,...    Ignore list (regex) ($KUMAGO_IGNORE_REGEX_LIST)
-      --notify-url=,...                            Discord URL ($KUMAGO_NOTIFY_URL)
-      --beat-emoji                                 Use emoji ($KUMAGO_BEAT_EMOJI)
-      --[no-]emoji                                 Use emoji ($KUMAGO_EMOJI)
+      --notify-url=,...                            Notification URL ($KUMAGO_NOTIFY_URL)
+      --[no-]beat                                  Show/hide heartbeat ($KUMAGO_BEAT)
+      --beat-emoji                                 Use emoji in beats ($KUMAGO_BEAT_EMOJI)
+      --[no-]emoji                                 Show synthesis emoji ($KUMAGO_EMOJI)
+      --color-warn-beat="yellow"                   Terminal color used to display a warn beat (ANSI color name) ($KUMAGO_COLOR_WARN_BEAT)
+      --color-ok-beat="green"                      Terminal color used to display an OK beat (ANSI color name) ($KUMAGO_COLOR_OK_BEAT)
+      --color-ko-beat="red"                        Terminal color used to display a KO beat (ANSI color name) ($KUMAGO_COLOR_KO_BEAT)
       --icon-term-icon="█"                         Symbol used to display a beat ($KUMAGO_ICON_TERM_ICON)
-      --icon-warn-beat="yellow"                    Terminal color used to display a warn beat ($KUMAGO_ICON_WARN_BEAT)
-      --icon-ok-beat="green"                       Terminal color used to display an OK beat ($KUMAGO_ICON_OK_BEAT)
-      --icon-ko-beat="red"                         Terminal color used to display a KO beat ($KUMAGO_ICON_KO_BEAT)
-      --icon-warn="🤔"                              Symbol used to indicate a warning state ($KUMAGO_ICON_WARN)
-      --icon-ok="👌"                                Symbol used to indicate an OK state ($KUMAGO_ICON_OK)
-      --icon-ko="🔥"                                Symbol used to indicate a KO state ($KUMAGO_ICON_KO)
-      --icon-error="🏩"                             Symbol used to indicate an error state ($KUMAGO_ICON_ERROR)
+      --icon-warn="🤔"                              Emoji used to indicate a warning state ($KUMAGO_ICON_WARN)
+      --icon-ok="👌"                                Emoji used to indicate an OK state ($KUMAGO_ICON_OK)
+      --icon-ko="🔥"                                Emoji used to indicate a KO state ($KUMAGO_ICON_KO)
+      --icon-error="🏩"                             Emoji used to indicate an error state ($KUMAGO_ICON_ERROR)
       --icon-warn-beat-emoji="🟧"                   Emoji used to display a warn beat ($KUMAGO_ICON_WARN_BEAT_EMOJI)
       --icon-ok-beat-emoji="🟩"                     Emoji used to display an OK beat ($KUMAGO_ICON_OK_BEAT_EMOJI)
       --icon-ko-beat-emoji="🟥"                     Emoji used to display a KO beat ($KUMAGO_ICON_KO_BEAT_EMOJI)
-```
+  ```
