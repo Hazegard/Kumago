@@ -85,7 +85,7 @@ func (n *Notifier) Notify(content Content, config Config) {
 		if (group.IsOK() && !config.KeepOk()) || (group.IsKO() && !config.KeepKo()) || (group.IsWarn() && !config.KeepWarn()) {
 			continue
 		}
-		message.WriteString(fmt.Sprintf("\n### %s\n```ansi\n", group.GroupName))
+		message.WriteString(fmt.Sprintf("\n### %s\n```ansi\n", removeANSICodes(group.GroupName)))
 		for _, monitor := range group.Monitors {
 			if monitor.State == KO && !config.KeepKo() || monitor.State == OK && !config.KeepOk() || monitor.State == Warn && !config.KeepWarn() {
 				continue

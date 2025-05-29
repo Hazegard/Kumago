@@ -17,11 +17,14 @@ import (
 
 const APP_NAME = "kumago"
 
-type Symbol struct {
-	TermIcon string `yaml:"ko" default:"█" help:"Symbol used to display a beat"`
+type Color struct {
 	WarnBeat string `yaml:"ko" default:"yellow" help:"Terminal color used to display a warn beat"`
 	OkBeat   string `yaml:"ko" default:"green" help:"Terminal color used to display an OK beat"`
 	KoBeat   string `yaml:"ko" default:"red" help:"Terminal color used to display a KO beat"`
+}
+
+type Symbol struct {
+	TermIcon string `yaml:"ko" default:"█" help:"Symbol used to display a beat"`
 
 	Warn  string `yaml:"warn" default:"🤔" help:"Symbol used to indicate a warning state"`
 	Ok    string `yaml:"ok" default:"👌" help:"Symbol used to indicate an OK state"`
@@ -45,14 +48,14 @@ func (s *Symbol) Get(state State) string {
 	return " "
 }
 
-func (s *Symbol) GetBeat(state State) string {
+func (s *Symbol) GetBeat(state State, c Color) string {
 	switch state {
 	case OK:
-		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(s.OkBeat)], s.TermIcon)
+		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(c.OkBeat)], s.TermIcon)
 	case KO:
-		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(s.KoBeat)], s.TermIcon)
+		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(c.KoBeat)], s.TermIcon)
 	case Warn:
-		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(s.WarnBeat)], s.TermIcon)
+		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(c.WarnBeat)], s.TermIcon)
 	}
 	return " "
 }
@@ -81,6 +84,7 @@ type Config struct {
 	NotifyUrl       []string         `help:"Discord URL" default:""`
 	BeatEmoji       bool             `help:"Use emoji" default:"false"`
 	Emoji           bool             `help:"Use emoji" default:"true" negatable:""`
+	Color           Color            `help:"Color" default:"" embed:"" prefix:"color-"`
 	Symbol          Symbol           `help:"Symbol" default:"" embed:"" prefix:"icon-"`
 }
 
@@ -148,14 +152,14 @@ func main() {
 		config.Symbol.Ko = ""
 		config.Symbol.Ok = ""
 	}
-	for _, dashboard := range config.DashboardPage {
-		titles, err := GetTitleDict(dashboard, config.Url)
+	for _, dash := range config.DashboardPage {
+		titles, err := GetTitleDict(dash, config.Url)
 		if err != nil {
 			Error(fmt.Errorf("Dashboard unavailable: %s", err), config)
 			return
 		}
 
-		dashboard, err := GetDashboard(dashboard, titles, config.Url)
+		dashboard, err := GetDashboard(dash, titles, config.Url)
 		if err != nil {
 			Error(fmt.Errorf("Dashboard unavailable: %s", err), config)
 			return
@@ -169,7 +173,7 @@ func main() {
 			return groups[i].Name < groups[j].Name
 		})
 
-		content, globalState, _ := Parse(config, groups, dashboard)
+		content, globalState, _ := Parse(config, groups, dashboard, dash)
 
 		PrintContent(content)
 		if config.Notify {
@@ -283,7 +287,7 @@ func Notify(hb Content, c Config) error {
 	return nil
 }
 
-func Parse(config Config, groups []Group, dashboard HeartBeatList) (Content, State, HeartBeatList) {
+func Parse(config Config, groups []Group, dashboard HeartBeatList, dashName string) (Content, State, HeartBeatList) {
 
 	globalState := OK
 
@@ -302,10 +306,6 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList) (Content, Sta
 	}
 
 	content := Content{}
-	xbar := ""
-	if config.Xbar {
-		xbar = " | font=\"FiraCode Nerd Font\""
-	}
 
 	maxWidth := 0
 
@@ -342,13 +342,11 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList) (Content, Sta
 				continue
 			}
 			icon = config.Symbol.Get(localStatus)
-			if localStatus == KO /*|| localStatus == Warn*/ {
-				//				downList[group] = []Monitor{}
+			if localStatus == KO {
 				downList[group] = append(downList[group], monitor)
 			}
-			// char, _ := StringToRune(config.Symbol.TermIcon)
 			nb := countChar(monitor.Beats(config), config)
-			//fmt.Println(nb)
+
 			pad := maxWidth - nb
 			if pad < 0 {
 				pad = 0
@@ -357,12 +355,20 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList) (Content, Sta
 				pad *= 2
 			}
 
+			beats := fmt.Sprintf("%-*s%s ", pad, "", monitor.Beats(config))
+
+			if config.Xbar {
+				beats = fmt.Sprintf("%s | font=\"FiraCode Nerd Font\"\n", beats)
+			} else {
+				beats = fmt.Sprintf("%s\n", beats)
+			}
+
 			contentGroup.Monitors = append(contentGroup.Monitors, ParsedMonitor{
 				State:      localStatus,
 				Emoji:      icon,
-				Beats:      fmt.Sprintf("%-*s%s %s\n", pad, "", monitor.Beats(config), xbar),
-				EmojiBeats: fmt.Sprintf("%-*s%s %s\n", pad, "", monitor.EmojiBeats(config), xbar),
-				Name:       fmt.Sprintf("%-*s", length, monitor.Name),
+				Beats:      beats,
+				EmojiBeats: fmt.Sprintf("%-*s%s \n", pad, "", monitor.EmojiBeats(config)),
+				Name:       monitor.GetName(length, config),
 			})
 			if globalState == KO {
 				continue
@@ -377,16 +383,27 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList) (Content, Sta
 				continue
 			}
 		}
+		if contentGroup.IsOK() {
+			contentGroup.GroupName = fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[config.Color.OkBeat], contentGroup.GroupName)
+		}
+
+		if contentGroup.IsWarn() {
+			contentGroup.GroupName = fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[config.Color.WarnBeat], contentGroup.GroupName)
+		}
+
+		if contentGroup.IsKO() {
+			contentGroup.GroupName = fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[config.Color.KoBeat], contentGroup.GroupName)
+		}
 		if len(contentGroup.Monitors) > 0 {
 			content.Content = append(content.Content, contentGroup)
 		}
 	}
 
-	// header := ""
+	content.Header = dashName
 	if config.Xbar {
 		icon := config.Symbol.Get(globalState)
 
-		content.Header = fmt.Sprintf("%s\n---", icon)
+		content.Header = fmt.Sprintf("%s %s\n---", dashName, icon)
 		content.Footer = "Refresh... | refresh=true"
 	}
 
@@ -428,6 +445,7 @@ func (c *Content) String() string {
 type ParsedGroups struct {
 	GroupName string
 	Monitors  []ParsedMonitor
+	Color     bool
 }
 
 func (group ParsedGroups) IsOK() bool {
