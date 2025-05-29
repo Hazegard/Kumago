@@ -463,11 +463,11 @@ func (group ParsedGroups) IsOK() bool {
 
 func (group ParsedGroups) IsKO() bool {
 	for _, monitor := range group.Monitors {
-		if monitor.State == OK || monitor.State == Warn {
-			return false
+		if monitor.State == KO {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 func (group ParsedGroups) IsWarn() bool {
