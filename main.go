@@ -73,20 +73,25 @@ func (s *Symbol) GetBeatEmoji(state State) string {
 }
 
 type Config struct {
-	Status          []string         `help:"Status to display (OK,KO,Warn)" default:"KO,Warn"`
-	Xbar            bool             `help:"Enable Xbar mode" default:"false"`
-	Notify          bool             `help:"Send notification" default:"false"`
-	Url             *url.URL         `help:"Kuma URL" default:"" short:"u"`
-	DashboardPage   []string         `help:"Dashboard pages to parse" default:"all" arg:""`
-	IgnoreList      []string         `help:"Ignore list" short:"i"`
-	IgnoreRegexList []string         `help:"Ignore list (regex)" short:"I"`
-	RegexList       []*regexp.Regexp `kong:"-"`
-	NotifyUrl       []string         `help:"Notification URL" default:""`
-	Beat            bool             `help:"Show/hide heartbeat" negatable:"" default:"true"`
-	BeatEmoji       bool             `help:"Use emoji in beats" default:"false"`
-	Emoji           bool             `help:"Show synthesis emoji" default:"true" negatable:""`
-	Color           Color            `help:"Color" default:"" embed:"" prefix:"color-"`
-	Symbol          Symbol           `help:"Symbol" default:"" embed:"" prefix:"icon-"`
+	Status        []string     `help:"Status to display (OK,KO,Warn)" default:"KO,Warn"`
+	Xbar          bool         `help:"Enable Xbar mode" default:"false"`
+	Notify        bool         `help:"Send notification" default:"false"`
+	Url           *url.URL     `help:"Kuma URL" default:"" short:"u"`
+	DashboardPage []string     `help:"Dashboard pages to parse" default:"all" arg:""`
+	IgnoreConfig  IgnoreConfig `help:"Ignore list" embed:""`
+	NotifyUrl     []string     `help:"Notification URL" default:""`
+	Beat          bool         `help:"Show/hide heartbeat" negatable:"" default:"true"`
+	BeatEmoji     bool         `help:"Use emoji in beats" default:"false"`
+	Emoji         bool         `help:"Show synthesis emoji" default:"true" negatable:""`
+	Color         Color        `help:"Color" default:"" embed:"" prefix:"color-"`
+	Symbol        Symbol       `help:"Symbol" default:"" embed:"" prefix:"icon-"`
+}
+
+type IgnoreConfig struct {
+	Ignore            []string         `help:"Ignore" short:"i"`
+	Onlylast          []string         `help:"Ignore list (regex)" short:"I"`
+	RegexList         []*regexp.Regexp `kong:"-"`
+	OnlyLastRegexList []*regexp.Regexp `kong:"-"`
 }
 
 func (c *Config) KeepOk() bool {
@@ -102,14 +107,38 @@ func (c *Config) KeepKo() bool {
 
 func (c *Config) Validate() error {
 	var errs []error
-	for _, ignoreStr := range c.IgnoreRegexList {
-		regex, err := regexp.Compile(ignoreStr)
-		if err != nil {
-			errs = append(errs, err)
-			continue
+	RE_MARKER := "re:"
+	var ignoreList []string
+	for _, ignoreStr := range c.IgnoreConfig.Ignore {
+		if strings.HasPrefix(ignoreStr, "re:") {
+			ignoreStr = strings.TrimPrefix(ignoreStr, RE_MARKER)
+			regex, err := regexp.Compile(ignoreStr)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			c.IgnoreConfig.RegexList = append(c.IgnoreConfig.RegexList, regex)
+		} else {
+			ignoreList = append(ignoreList, ignoreStr)
 		}
-		c.RegexList = append(c.RegexList, regex)
 	}
+	c.IgnoreConfig.Ignore = ignoreList
+
+	var onlyLastList []string
+	for _, onlyLastStr := range c.IgnoreConfig.Onlylast {
+		if strings.HasPrefix(onlyLastStr, "re:") {
+			onlyLastStr = strings.TrimPrefix(onlyLastStr, RE_MARKER)
+			regex, err := regexp.Compile(onlyLastStr)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			c.IgnoreConfig.OnlyLastRegexList = append(c.IgnoreConfig.OnlyLastRegexList, regex)
+		} else {
+			onlyLastList = append(onlyLastList, onlyLastStr)
+		}
+	}
+	c.IgnoreConfig.Onlylast = onlyLastList
 
 	_, err := StringToRune(c.Symbol.TermIcon)
 	if err != nil {
@@ -316,7 +345,7 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList, dashName stri
 	for _, group := range groups {
 		monitors := dashboard[group]
 		for _, monitor := range monitors {
-			localStatus, _ := monitor.analyzeStatus(config.IgnoreList, config.RegexList)
+			localStatus, _ := monitor.analyzeStatus(config.IgnoreConfig)
 			if (localStatus == KO && !config.KeepKo()) || (localStatus == Warn && !config.KeepWarn()) || (localStatus == OK && !config.KeepOk()) {
 				continue
 			}
@@ -341,7 +370,10 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList, dashName stri
 
 		for _, monitor := range monitors {
 			var icon string
-			localStatus, globalStatus := monitor.analyzeStatus(config.IgnoreList, config.RegexList)
+			localStatus, globalStatus := monitor.analyzeStatus(config.IgnoreConfig)
+			if globalStatus != OK {
+				fmt.Println(monitor.Name, globalStatus, localStatus)
+			}
 			if (localStatus == KO && !config.KeepKo()) || (localStatus == Warn && !config.KeepWarn()) || (localStatus == OK && !config.KeepOk()) {
 				continue
 			}

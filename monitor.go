@@ -25,6 +25,17 @@ var (
 
 type State int
 
+func (s *State) String() string {
+	switch *s {
+	case OK:
+		return "OK"
+	case Warn:
+		return "WARN"
+	case KO:
+		return "KO"
+	}
+	return "UNKNOWN"
+}
 func (s *State) Min(t State) State {
 	if *s > t {
 		return t
@@ -149,22 +160,42 @@ type Monitor struct {
 	analyzeStatusSync sync.Once
 }
 
-func (m *Monitor) analyzeStatus(ignoreList []string, ignoreRegex []*regexp.Regexp) (State, State) {
-	m.analyzeStatusSync.Do(func() {
-		var ignore = map[string]struct{}{}
-		for _, ignoreStr := range ignoreList {
-			ignore[ignoreStr] = struct{}{}
+func IsInList(name string, list []string, regexList []*regexp.Regexp) bool {
+	for _, s := range list {
+		if s == name {
+			return true
 		}
-		ignored := false
-		if _, ok := ignore[m.Name]; ok {
-			ignored = true
-		}
+	}
 
-		for _, regex := range ignoreRegex {
-			if regex.MatchString(m.Name) {
-				ignored = true
-				break
+	for _, regex := range regexList {
+		if regex.MatchString(name) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Monitor) analyzeStatus(ignoreConf IgnoreConfig) (State, State) {
+	m.analyzeStatusSync.Do(func() {
+		ignored := IsInList(m.Name, ignoreConf.Ignore, ignoreConf.RegexList)
+		onlyLast := IsInList(m.Name, ignoreConf.Onlylast, ignoreConf.OnlyLastRegexList)
+
+		if onlyLast {
+			state := m.Status[len(m.Status)-1].Status
+			if ignored && state == KO || state == Warn {
+				m.localState = Warn
+				m.globalState = OK
+				return
 			}
+			if state == KO || state == Warn {
+				m.localState = state
+				m.globalState = state
+				return
+			}
+			m.localState = OK
+			m.globalState = OK
+			// Do not return here — we continue to check for earlier KO statuses
+			// even if the latest is OK, to maintain original behavior.
 		}
 
 		n := len(m.Status)
@@ -174,27 +205,25 @@ func (m *Monitor) analyzeStatus(ignoreList []string, ignoreRegex []*regexp.Regex
 			return
 		}
 
-		// Check if status warn
-		if m.Status[n-1].Status == Warn {
+		status := m.Status[n-1].Status
+		if status == Warn || status == KO {
+			var localState, globalState State
+
 			if ignored {
-				m.localState = Warn
-				m.globalState = OK
-				return
+				localState = Warn
+				globalState = OK
+			} else {
+				localState = status
+				globalState = status
 			}
-			m.localState = Warn
-			m.globalState = Warn
+
+			m.localState = localState
+			if !onlyLast {
+				m.globalState = globalState
+			}
 			return
 		}
-		if m.Status[n-1].Status == KO {
-			if ignored {
-				m.localState = Warn
-				m.globalState = OK
-				return
-			}
-			m.localState = KO
-			m.globalState = KO
-			return
-		}
+
 		for i := len(m.Status) - 1; i >= 0; i-- {
 			if i == len(m.Status)-1 {
 				// explicitly skip the last element as here it is always OK
@@ -203,19 +232,41 @@ func (m *Monitor) analyzeStatus(ignoreList []string, ignoreRegex []*regexp.Regex
 			if m.Status[i].Status == KO {
 				if ignored {
 					m.localState = Warn
-					m.globalState = OK
+					if !onlyLast {
+						m.globalState = OK
+					}
 					return
 				}
 				m.localState = Warn
-				m.globalState = Warn
+				if !onlyLast {
+					m.globalState = Warn
+				}
 				return
 			}
 		}
 		m.localState = OK
-		m.globalState = OK
+		if !onlyLast {
+			m.globalState = OK
+		}
 	})
 
 	return m.localState, m.globalState
+}
+
+func (m *Monitor) CheckFinalStatus(state State, ignored bool, onlyLast bool) bool {
+	if m.Status[len(m.Status)-1].Status == state {
+		m.localState = Warn
+		if ignored && !onlyLast {
+			m.globalState = OK
+			return true
+		}
+		m.globalState = state
+		if !onlyLast {
+			m.globalState = state
+		}
+		return true
+	}
+	return false
 }
 
 func (m *Monitor) Beats(c Config) string {
@@ -235,7 +286,7 @@ func (m *Monitor) Beats(c Config) string {
 
 func (m *Monitor) GetName(length int, c Config) string {
 	color := ""
-	status, _ := m.analyzeStatus(c.IgnoreList, c.RegexList)
+	status, _ := m.analyzeStatus(c.IgnoreConfig)
 	switch status {
 	case OK:
 		color = c.Color.OkBeat
