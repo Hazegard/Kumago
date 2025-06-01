@@ -44,6 +44,8 @@ func (s *Symbol) Get(state State) string {
 		return s.Ko
 	case Warn:
 		return s.Warn
+	case WarnOk:
+		return s.Ok
 	}
 	return " "
 }
@@ -51,6 +53,8 @@ func (s *Symbol) Get(state State) string {
 func (s *Symbol) GetBeat(state State, c Color) string {
 	switch state {
 	case OK:
+		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(c.OkBeat)], s.Term)
+	case WarnOk:
 		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(c.OkBeat)], s.Term)
 	case KO:
 		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(c.KoBeat)], s.Term)
@@ -64,6 +68,8 @@ func (s *Symbol) GetBeatEmoji(state State) string {
 	switch state {
 	case OK:
 		return s.OkBeatEmoji
+	case WarnOk:
+		return s.Ok
 	case KO:
 		return s.KoBeatEmoji
 	case Warn:

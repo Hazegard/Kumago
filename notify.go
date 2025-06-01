@@ -43,6 +43,8 @@ func (csb *ColoredStringBuilder) Color() string {
 	switch csb.State {
 	case Warn:
 		return yellow
+	case WarnOk:
+		return green
 	case OK:
 		return green
 	case KO:
