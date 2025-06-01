@@ -29,6 +29,8 @@ func (s *State) String() string {
 	switch *s {
 	case OK:
 		return "OK"
+	case WarnOk:
+		return "WARN_OK"
 	case Warn:
 		return "WARN"
 	case KO:
@@ -66,6 +68,7 @@ const (
 	KO State = iota
 	Warn
 	OK
+	WarnOk
 )
 
 type StatusTime time.Time
@@ -243,13 +246,14 @@ func (m *Monitor) analyzeStatus(ignoreConf IgnoreConfig) (State, State) {
 
 		// We start to iterate over the status list from the last element to the first element
 		// Here we know that the last status is always OK
+		isWarnOk := false
 		for i := len(m.Status) - 1; i >= 0; i-- {
 			if i == len(m.Status)-1 {
 				// explicitly skip the last element as here it is always OK
 				continue
 			}
 			if m.Status[i].Status == KO {
-				// If we find a KO status, we set the local state to warn
+				// If we find a KO or Warn status, we set the local state to warn
 				m.localState = Warn
 
 				if ignored && !onlyLast {
@@ -268,9 +272,16 @@ func (m *Monitor) analyzeStatus(ignoreConf IgnoreConfig) (State, State) {
 				//
 				return
 			}
+			if m.Status[i].Status == Warn {
+				isWarnOk = true
+			}
 		}
-		// If we reach this point, it means that the monitor is currently OK
-		m.localState = OK
+		if isWarnOk {
+			m.localState = WarnOk
+		} else {
+			// If we reach this point, it means that the monitor is currently OK
+			m.localState = OK
+		}
 		// If the monitor is not in onlyLast mode, we set the global state to OK
 		if !onlyLast {
 			m.globalState = OK
@@ -316,6 +327,8 @@ func (m *Monitor) GetName(length int, c Config) string {
 	status, _ := m.analyzeStatus(c.IgnoreConfig)
 	switch status {
 	case OK:
+		color = c.Color.OkBeat
+	case WarnOk:
 		color = c.Color.OkBeat
 	case Warn:
 		color = c.Color.WarnBeat
