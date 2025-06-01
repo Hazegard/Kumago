@@ -24,7 +24,7 @@ type Color struct {
 }
 
 type Symbol struct {
-	TermIcon string `yaml:"ko" default:"█" help:"Symbol used to display a beat"`
+	Term string `yaml:"ko" default:"█" help:"Symbol used to display a beat"`
 
 	Warn  string `yaml:"warn" default:"🤔" help:"Emoji used to indicate a warning state"`
 	Ok    string `yaml:"ok" default:"👌" help:"Emoji used to indicate an OK state"`
@@ -51,11 +51,11 @@ func (s *Symbol) Get(state State) string {
 func (s *Symbol) GetBeat(state State, c Color) string {
 	switch state {
 	case OK:
-		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(c.OkBeat)], s.TermIcon)
+		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(c.OkBeat)], s.Term)
 	case KO:
-		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(c.KoBeat)], s.TermIcon)
+		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(c.KoBeat)], s.Term)
 	case Warn:
-		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(c.WarnBeat)], s.TermIcon)
+		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(c.WarnBeat)], s.Term)
 	}
 	return " "
 }
@@ -88,8 +88,8 @@ type Config struct {
 }
 
 type IgnoreConfig struct {
-	Ignore            []string         `help:"Ignore" short:"i"`
-	Onlylast          []string         `help:"Ignore list (regex)" short:"I"`
+	Ignore            []string         `help:"List of ignored monitor (prefix with \"re:\" to match using regexes)" short:"i"`
+	Onlylast          []string         `help:"List of monitor that must be analyzed based on the last status only (prefix with \"re:\" to match using regexes)" short:"I"`
 	RegexList         []*regexp.Regexp `kong:"-"`
 	OnlyLastRegexList []*regexp.Regexp `kong:"-"`
 }
@@ -140,9 +140,9 @@ func (c *Config) Validate() error {
 	}
 	c.IgnoreConfig.Onlylast = onlyLastList
 
-	_, err := StringToRune(c.Symbol.TermIcon)
+	_, err := StringToRune(c.Symbol.Term)
 	if err != nil {
-		errs = append(errs, fmt.Errorf("invalid term icon (%s): %s", c.Symbol.TermIcon, err))
+		errs = append(errs, fmt.Errorf("invalid term icon (%s): %s", c.Symbol.Term, err))
 	}
 	return errors.Join(errs...)
 }
@@ -248,7 +248,7 @@ func countChar(s string, c Config) int {
 		}
 		return count
 	} else {
-		t, _ := StringToRune(c.Symbol.TermIcon)
+		t, _ := StringToRune(c.Symbol.Term)
 		for _, r := range s {
 			if r == t {
 				count++
