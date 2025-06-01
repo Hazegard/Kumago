@@ -180,71 +180,98 @@ func (m *Monitor) analyzeStatus(ignoreConf IgnoreConfig) (State, State) {
 		ignored := IsInList(m.Name, ignoreConf.Ignore, ignoreConf.RegexList)
 		onlyLast := IsInList(m.Name, ignoreConf.Onlylast, ignoreConf.OnlyLastRegexList)
 
+		// If the monitor is empty (no state has been reported to uptime-kuma).
+		// We consider it as OK and return
+		if len(m.Status) == 0 {
+			m.localState = OK
+			m.globalState = OK
+			return
+		}
+
+		lastState := m.Status[len(m.Status)-1].Status
+		// Only the last status is relevant.
 		if onlyLast {
-			state := m.Status[len(m.Status)-1].Status
-			if ignored && state == KO || state == Warn {
+			// If the last status is either KO or Warn and the monitor is ignored,
+			// we set the global state to OK, and the local state to Warn.
+			// We then exit as we do not need further processing
+			if ignored && lastState == KO || lastState == Warn {
 				m.localState = Warn
 				m.globalState = OK
 				return
 			}
-			if state == KO || state == Warn {
-				m.localState = state
-				m.globalState = state
+
+			// If the monitor is not ignored and either KO or Warn,
+			// We set the local and global states to the last status and return
+			// We then exit as we do not need further processing
+			if lastState == KO || lastState == Warn {
+				m.localState = lastState
+				m.globalState = lastState
 				return
 			}
+
+			// Else, the last status is OK, so we set the local and global states to OK.
+			// But we do not return here as we want to check for earlier KO or warn statuses
+			// To update accordingly the local stats (the global state should not be updated afterward)
+			// If the monitor is in onlyLast mode.
 			m.localState = OK
 			m.globalState = OK
-			// Do not return here — we continue to check for earlier KO statuses
-			// even if the latest is OK, to maintain original behavior.
 		}
 
-		n := len(m.Status)
-		if n == 0 {
-			m.localState = OK
-			m.globalState = OK
-			return
-		}
-
-		status := m.Status[n-1].Status
-		if status == Warn || status == KO {
-			var localState, globalState State
+		// If all states of the monitor are analyzed,
+		// We first check if the last state is Warn or KO
+		if lastState == Warn || lastState == KO {
+			var globalState State
 
 			if ignored {
-				localState = Warn
+				// If the monitor is ignored, we set the global state to OK, and the local state to Warn.
+				m.localState = Warn
 				globalState = OK
 			} else {
-				localState = status
-				globalState = status
+				// Else, we set the local and global states to the last status.
+				m.localState = lastState
+				globalState = lastState
 			}
 
-			m.localState = localState
 			if !onlyLast {
+				// If the monitor is not in onlyLast mode, we update the global state accordingly.
 				m.globalState = globalState
 			}
+			// We do not need to process further the monitor as we have already set the local and global states
+			// And these states will no change
 			return
 		}
 
+		// We start to iterate over the status list from the last element to the first element
+		// Here we know that the last status is always OK
 		for i := len(m.Status) - 1; i >= 0; i-- {
 			if i == len(m.Status)-1 {
 				// explicitly skip the last element as here it is always OK
 				continue
 			}
 			if m.Status[i].Status == KO {
-				if ignored {
-					m.localState = Warn
-					if !onlyLast {
-						m.globalState = OK
-					}
+				// If we find a KO status, we set the local state to warn
+				m.localState = Warn
+
+				if ignored && !onlyLast {
+					// If the monitor is ignored and not in onlyLast mode, we set the global state to OK
+					m.globalState = OK
 					return
 				}
-				m.localState = Warn
+				// Else if the monitor is not ignored and still not in onlyLast mode, we set the global state to warn
 				if !onlyLast {
 					m.globalState = Warn
+					return
 				}
+				// Note: we never set here a state to KO as the monitor is currently OK
+				// Here we just want to highlight a minor issue:
+				// Either the monitor was down in the timeframe displayed by uptime-kuma,
+				//
 				return
 			}
 		}
+		// If we reach this point, it means that the monitor is currently OK
 		m.localState = OK
+		// If the monitor is not in onlyLast mode, we set the global state to OK
 		if !onlyLast {
 			m.globalState = OK
 		}
