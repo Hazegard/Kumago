@@ -2,6 +2,11 @@
 
 > Simple golang tool used to fetch the current state of a dashboard
 
+It relies on dashboard pages to fetch the current information.
+
+No credentials needed, just setting up an uptime-kuma dashboard with the monitors
+
+It will parse the dashboard and use the public API to fetch the information needed to rebuild locally the informations.
 
 ![img_1.png](img/img_1.png)
 
