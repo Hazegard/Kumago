@@ -371,9 +371,6 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList, dashName stri
 		for _, monitor := range monitors {
 			var icon string
 			localStatus, globalStatus := monitor.analyzeStatus(config.IgnoreConfig)
-			if globalStatus != OK {
-				fmt.Println(monitor.Name, globalStatus, localStatus)
-			}
 			if (localStatus == KO && !config.KeepKo()) || (localStatus == Warn && !config.KeepWarn()) || (localStatus == OK && !config.KeepOk()) {
 				continue
 			}
