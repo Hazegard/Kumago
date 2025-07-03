@@ -106,8 +106,8 @@ func GetTitleDict(dashboardName string, url *url.URL) (map[string]MonitorTitle, 
 	return monitorTitles, nil
 }
 
-func GetDashboard(dashboardName string, titles map[string]MonitorTitle, url *url.URL) (HeartBeatList, error) {
-	r, err := http.Get(fmt.Sprintf("%s/api/status-page/heartbeat/%s", url, dashboardName))
+func GetDashboard(dashboardName string, titles map[string]MonitorTitle, config Config) (HeartBeatList, error) {
+	r, err := http.Get(fmt.Sprintf("%s/api/status-page/heartbeat/%s", config.Url, dashboardName))
 	if err != nil {
 		return HeartBeatList{}, err
 	}
@@ -129,6 +129,9 @@ func GetDashboard(dashboardName string, titles map[string]MonitorTitle, url *url
 		group := Group{
 			Id:   titles[monitorId].GroupId,
 			Name: titles[monitorId].GroupName,
+		}
+		if len(status) > config.Beats {
+			status = status[len(status)-config.Beats:]
 		}
 		monitor := &Monitor{
 			Id:     monitorId,
