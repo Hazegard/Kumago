@@ -193,7 +193,6 @@ func main() {
 		fmt.Printf(config.GetVersion())
 		return
 	}
-
 	if !CheckAvailability(config.Url) {
 		Error(fmt.Errorf("Dashboard unavailable: not connected to kuma"), config)
 		return
