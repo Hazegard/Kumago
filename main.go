@@ -24,22 +24,25 @@ var (
 const APP_NAME = "kumago"
 
 type Color struct {
-	WarnBeat string `yaml:"ko" default:"yellow" help:"Terminal color used to display a warn beat (ANSI color name)"`
-	OkBeat   string `yaml:"ko" default:"green" help:"Terminal color used to display an OK beat (ANSI color name)"`
-	KoBeat   string `yaml:"ko" default:"red" help:"Terminal color used to display a KO beat (ANSI color name)"`
+	IgnoredBeat string `yaml:"ko" default:"cyan" help:"Terminal color used to display an ignored beat (ANSI color name)"`
+	WarnBeat    string `yaml:"ko" default:"yellow" help:"Terminal color used to display a warn beat (ANSI color name)"`
+	OkBeat      string `yaml:"ko" default:"green" help:"Terminal color used to display an OK beat (ANSI color name)"`
+	KoBeat      string `yaml:"ko" default:"red" help:"Terminal color used to display a KO beat (ANSI color name)"`
 }
 
 type Symbol struct {
 	Term string `yaml:"ko" default:"█" help:"Symbol used to display a beat"`
 
-	Warn  string `yaml:"warn" default:"🤔" help:"Emoji used to indicate a warning state"`
-	Ok    string `yaml:"ok" default:"👌" help:"Emoji used to indicate an OK state"`
-	Ko    string `yaml:"ko" default:"🔥" help:"Emoji used to indicate a KO state"`
-	Error string `yaml:"ko" default:"🏩" help:"Emoji used to indicate an error state"`
+	Warn    string `yaml:"warn" default:"🤔" help:"Emoji used to indicate a warning state"`
+	Ignored string `yaml:"ignored" default:"💤" help:"Emoji used to indicate a warning state"`
+	Ok      string `yaml:"ok" default:"👌" help:"Emoji used to indicate an OK state"`
+	Ko      string `yaml:"ko" default:"🔥" help:"Emoji used to indicate a KO state"`
+	Error   string `yaml:"ko" default:"🏩" help:"Emoji used to indicate an error state"`
 
-	WarnBeatEmoji string `yaml:"ko" default:"🟧" help:"Emoji used to display a warn beat"`
-	OkBeatEmoji   string `yaml:"ko" default:"🟩" help:"Emoji used to display an OK beat"`
-	KoBeatEmoji   string `yaml:"ko" default:"🟥" help:"Emoji used to display a KO beat"`
+	IgnoredBeatEmoji string `yaml:"ko" default:"🟦" help:"Emoji used to display a warn beat"`
+	WarnBeatEmoji    string `yaml:"ko" default:"🟧" help:"Emoji used to display a warn beat"`
+	OkBeatEmoji      string `yaml:"ko" default:"🟩" help:"Emoji used to display an OK beat"`
+	KoBeatEmoji      string `yaml:"ko" default:"🟥" help:"Emoji used to display a KO beat"`
 }
 
 func (s *Symbol) Get(state State) string {
@@ -52,6 +55,8 @@ func (s *Symbol) Get(state State) string {
 		return s.Warn
 	case WarnOk:
 		return s.Ok
+	case Ignored:
+		return s.Ignored
 	}
 	return " "
 }
@@ -66,6 +71,8 @@ func (s *Symbol) GetBeat(state State, c Color) string {
 		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(c.KoBeat)], s.Term)
 	case Warn:
 		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(c.WarnBeat)], s.Term)
+	case Ignored:
+		return fmt.Sprintf("\u001B[%dm%s\u001B[0m", colors[strings.ToLower(c.IgnoredBeat)], s.Term)
 	}
 	return " "
 }
@@ -80,6 +87,8 @@ func (s *Symbol) GetBeatEmoji(state State) string {
 		return s.KoBeatEmoji
 	case Warn:
 		return s.WarnBeatEmoji
+	case Ignored:
+		return s.IgnoredBeatEmoji
 	}
 	return " "
 }
@@ -267,9 +276,10 @@ func countChar(s string, c Config) int {
 
 	count := 0
 	var (
-		ok   rune
-		ko   rune
-		warn rune
+		ok      rune
+		ko      rune
+		warn    rune
+		ignored rune
 	)
 	if !c.Beat {
 		return 0
@@ -281,8 +291,10 @@ func countChar(s string, c Config) int {
 		ko = r
 		r, _ = StringToRune(c.Symbol.WarnBeatEmoji)
 		warn = r
+		r, _ = StringToRune(c.Symbol.IgnoredBeatEmoji)
+		ignored = r
 		for _, r := range s {
-			if r == ok || r == ko || r == warn {
+			if r == ok || r == ko || r == warn || r == ignored {
 				count++
 			}
 		}
@@ -368,7 +380,8 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList, dashName stri
 	length := 0
 	for _, monitors := range dashboard {
 		for _, monitor := range monitors {
-			if (monitor.IsOK() && !config.KeepOk()) || monitor.IsWarn() && !config.KeepWarn() || monitor.IsKO() && !config.KeepKo() {
+			localStatus, _ := monitor.analyzeStatus(config.IgnoreConfig)
+			if (localStatus == KO && !config.KeepKo()) || (localStatus == Warn && !config.KeepWarn()) || (localStatus == OK && !config.KeepOk()) {
 				continue
 			}
 			l := len(monitor.Name)

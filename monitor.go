@@ -69,6 +69,7 @@ const (
 	Warn
 	OK
 	WarnOk
+	Ignored
 )
 
 type StatusTime time.Time
@@ -157,6 +158,7 @@ func (hbl *HeartBeatList) IsWarn(group Group, ignore map[string]struct{}) bool {
 type Monitor struct {
 	Id                string
 	Name              string
+	IsIgnored         bool
 	Status            []Status
 	localState        State
 	globalState       State
@@ -183,6 +185,7 @@ func (m *Monitor) analyzeStatus(ignoreConf IgnoreConfig) (State, State) {
 		ignored := IsInList(m.Name, ignoreConf.Ignore, ignoreConf.RegexList)
 		onlyLast := IsInList(m.Name, ignoreConf.Onlylast, ignoreConf.OnlyLastRegexList)
 
+		m.IsIgnored = ignored
 		// If the monitor is empty (no state has been reported to uptime-kuma).
 		// We consider it as OK and return
 		if len(m.Status) == 0 {
@@ -198,7 +201,7 @@ func (m *Monitor) analyzeStatus(ignoreConf IgnoreConfig) (State, State) {
 			// we set the global state to OK, and the local state to Warn.
 			// We then exit as we do not need further processing
 			if ignored && lastState == KO || lastState == Warn {
-				m.localState = Warn
+				m.localState = Ignored
 				m.globalState = OK
 				return
 			}
@@ -227,7 +230,7 @@ func (m *Monitor) analyzeStatus(ignoreConf IgnoreConfig) (State, State) {
 
 			if ignored {
 				// If the monitor is ignored, we set the global state to OK, and the local state to Warn.
-				m.localState = Warn
+				m.localState = Ignored
 				globalState = OK
 			} else {
 				// Else, we set the local and global states to the last status.
@@ -313,6 +316,9 @@ func (m *Monitor) Beats(c Config) string {
 	}
 	sb := strings.Builder{}
 	for _, status := range m.Status {
+		if m.IsIgnored && status.Status != OK {
+			status.Status = Ignored
+		}
 		if c.BeatEmoji && c.Emoji {
 			sb.WriteString(c.Symbol.GetBeatEmoji(status.Status))
 		} else {
@@ -328,6 +334,8 @@ func (m *Monitor) GetName(length int, c Config) string {
 	switch status {
 	case OK:
 		color = c.Color.OkBeat
+	case Ignored:
+		color = c.Color.IgnoredBeat
 	case WarnOk:
 		color = c.Color.OkBeat
 	case Warn:
