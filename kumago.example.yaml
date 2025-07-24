@@ -4,11 +4,15 @@ status:
 xbar: false
 notify: false
 url: "https://status.example.com"
-ignore-list:
+ignore:
   - "Name 1"
   - "APP Name 2"
-ignore-regex-list:
   - "(?i)Name 2"
+ignore-section:
+  - "Name 1"
+  - "APP Name 2"
+  - "(?i)Name 2"
+onlylast:
 
 notify-url: discord://URL?splitlines=no
 

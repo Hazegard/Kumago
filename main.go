@@ -106,8 +106,10 @@ func (c *Config) GetVersion() string {
 
 type IgnoreConfig struct {
 	Ignore            []string         `help:"List of ignored monitor (prefix with \"re:\" to match using regexes)" short:"i"`
+	IgnoreSection     []string         `help:"List of ignored monitor (prefix with \"re:\" to match using regexes)"`
 	Onlylast          []string         `help:"List of monitor that must be analyzed based on the last status only (prefix with \"re:\" to match using regexes)" short:"I"`
 	RegexList         []*regexp.Regexp `kong:"-"`
+	RegexSectionList  []*regexp.Regexp `kong:"-"`
 	OnlyLastRegexList []*regexp.Regexp `kong:"-"`
 }
 
@@ -125,6 +127,23 @@ func (c *Config) KeepKo() bool {
 func (c *Config) Validate() error {
 	var errs []error
 	RE_MARKER := "re:"
+
+	var ignoreSectionList []string
+	for _, sectionStr := range c.IgnoreConfig.IgnoreSection {
+		if strings.HasPrefix(sectionStr, "re:") {
+			sectionStr = strings.TrimPrefix(sectionStr, RE_MARKER)
+			regex, err := regexp.Compile(sectionStr)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			c.IgnoreConfig.RegexSectionList = append(c.IgnoreConfig.RegexSectionList, regex)
+		} else {
+			ignoreSectionList = append(ignoreSectionList, sectionStr)
+		}
+	}
+	c.IgnoreConfig.IgnoreSection = ignoreSectionList
+
 	var ignoreList []string
 	for _, ignoreStr := range c.IgnoreConfig.Ignore {
 		if strings.HasPrefix(ignoreStr, "re:") {
@@ -210,7 +229,7 @@ func main() {
 			return
 		}
 
-		dashboard, err := GetDashboard(dash, titles, config.Url)
+		dashboard, err := GetDashboard(dash, titles, config.Url, config.IgnoreConfig)
 		if err != nil {
 			Error(fmt.Errorf("Dashboard unavailable: %s", err), config)
 			return
