@@ -101,6 +101,7 @@ type Config struct {
 	DashboardPage []string     `help:"Dashboard pages to parse" default:"all" arg:""`
 	IgnoreConfig  IgnoreConfig `help:"Ignore list" embed:""`
 	NotifyUrl     []string     `help:"Notification URL" default:""`
+	Beats         int          `help:"Show/hide heartbeat" default:"50"`
 	Beat          bool         `help:"Show/hide heartbeat" negatable:"" default:"true"`
 	BeatEmoji     bool         `help:"Use emoji in beats" default:"false"`
 	Emoji         bool         `help:"Show synthesis emoji" default:"true" negatable:""`
@@ -238,7 +239,7 @@ func main() {
 			return
 		}
 
-		dashboard, err := GetDashboard(dash, titles, config.Url, config.IgnoreConfig)
+		dashboard, err := GetDashboard(dash, titles, config)
 		if err != nil {
 			Error(fmt.Errorf("Dashboard unavailable: %s", err), config)
 			return
