@@ -116,15 +116,22 @@ func (c *Config) GetVersion() string {
 
 type IgnoreConfig struct {
 	Ignore            []string         `help:"List of ignored monitor (prefix with \"re:\" to match using regexes)" short:"i"`
+	Hidden            []string         `help:"List of hidden monitor (prefix with \"re:\" to match using regexes)"`
 	IgnoreSection     []string         `help:"List of ignored monitor (prefix with \"re:\" to match using regexes)"`
 	Onlylast          []string         `help:"List of monitor that must be analyzed based on the last status only (prefix with \"re:\" to match using regexes)" short:"I"`
 	RegexList         []*regexp.Regexp `kong:"-"`
 	RegexSectionList  []*regexp.Regexp `kong:"-"`
 	OnlyLastRegexList []*regexp.Regexp `kong:"-"`
+	HiddenRegexList   []*regexp.Regexp `kong:"-"`
 }
 
 func (c *Config) KeepOk() bool {
 	return ContainsStringFold(c.Status, "all") || ContainsStringFold(c.Status, "ok")
+}
+
+func (c *Config) KeepIgnored() bool {
+	return ContainsStringFold(c.Status, "all") || ContainsStringFold(c.Status, "ignored")
+
 }
 
 func (c *Config) KeepWarn() bool {
@@ -134,9 +141,29 @@ func (c *Config) KeepKo() bool {
 	return ContainsStringFold(c.Status, "all") || ContainsStringFold(c.Status, "ko")
 }
 
+func (c *Config) Keep(localStatus State) bool {
+	return !((localStatus == KO && !c.KeepKo()) || (localStatus == Warn && !c.KeepWarn()) || (localStatus == OK && !c.KeepOk()) || (localStatus == Ignored && !c.KeepIgnored()))
+}
+
 func (c *Config) Validate() error {
 	var errs []error
 	RE_MARKER := "re:"
+
+	var hiddenList []string
+	for _, sectionStr := range c.IgnoreConfig.Hidden {
+		if strings.HasPrefix(sectionStr, "re:") {
+			sectionStr = strings.TrimPrefix(sectionStr, RE_MARKER)
+			regex, err := regexp.Compile(sectionStr)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			c.IgnoreConfig.HiddenRegexList = append(c.IgnoreConfig.HiddenRegexList, regex)
+		} else {
+			hiddenList = append(hiddenList, sectionStr)
+		}
+	}
+	c.IgnoreConfig.Hidden = hiddenList
 
 	var ignoreSectionList []string
 	for _, sectionStr := range c.IgnoreConfig.IgnoreSection {
@@ -364,6 +391,7 @@ func Notify(hb Content, c Config) error {
 	if c.NotifyUrl == nil {
 		return fmt.Errorf("no notify url")
 	}
+
 	err, notifier := NewNotifier(c)
 
 	if err != nil {
@@ -382,7 +410,7 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList, dashName stri
 	for _, monitors := range dashboard {
 		for _, monitor := range monitors {
 			localStatus, _ := monitor.analyzeStatus(config.IgnoreConfig)
-			if (localStatus == KO && !config.KeepKo()) || (localStatus == Warn && !config.KeepWarn()) || (localStatus == OK && !config.KeepOk()) {
+			if !config.Keep(localStatus) || IsInList(monitor.Name, config.IgnoreConfig.Hidden, config.IgnoreConfig.HiddenRegexList) {
 				continue
 			}
 			l := len(monitor.Name)
@@ -400,7 +428,7 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList, dashName stri
 		monitors := dashboard[group]
 		for _, monitor := range monitors {
 			localStatus, _ := monitor.analyzeStatus(config.IgnoreConfig)
-			if (localStatus == KO && !config.KeepKo()) || (localStatus == Warn && !config.KeepWarn()) || (localStatus == OK && !config.KeepOk()) {
+			if !config.Keep(localStatus) || IsInList(monitor.Name, config.IgnoreConfig.Hidden, config.IgnoreConfig.HiddenRegexList) {
 				continue
 			}
 
@@ -425,7 +453,7 @@ func Parse(config Config, groups []Group, dashboard HeartBeatList, dashName stri
 		for _, monitor := range monitors {
 			var icon string
 			localStatus, globalStatus := monitor.analyzeStatus(config.IgnoreConfig)
-			if (localStatus == KO && !config.KeepKo()) || (localStatus == Warn && !config.KeepWarn()) || (localStatus == OK && !config.KeepOk()) {
+			if !config.Keep(localStatus) || IsInList(monitor.Name, config.IgnoreConfig.Hidden, config.IgnoreConfig.HiddenRegexList) {
 				continue
 			}
 			icon = config.Symbol.Get(localStatus)

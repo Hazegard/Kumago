@@ -89,7 +89,9 @@ func (n *Notifier) Notify(content Content, config Config) {
 		}
 		message.WriteString(fmt.Sprintf("\n### %s\n```ansi\n", removeANSICodes(group.GroupName)))
 		for _, monitor := range group.Monitors {
-			if monitor.State == KO && !config.KeepKo() || monitor.State == OK && !config.KeepOk() || monitor.State == Warn && !config.KeepWarn() {
+			if !config.Keep(monitor.State) ||
+				IsInList(monitor.Name, config.IgnoreConfig.Hidden, config.IgnoreConfig.HiddenRegexList) ||
+				(IsInList(monitor.Name, config.IgnoreConfig.Onlylast, config.IgnoreConfig.OnlyLastRegexList) && (monitor.State == Warn || monitor.State == WarnOk)) {
 				continue
 			}
 			message.Colorize(monitor.State)
