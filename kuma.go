@@ -60,28 +60,29 @@ func CheckAvailability(url *url.URL) bool {
 	return true
 }
 
-func GetTitleDict(dashboardName string, url *url.URL) (map[string]MonitorTitle, error) {
+func GetTitleDict(dashboardName string, url *url.URL) (map[string]MonitorTitle, []Group, error) {
 	r, err := http.Get(fmt.Sprintf("%s/status/%s", url, dashboardName))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer r.Body.Close()
 	body, err := io.ReadAll(r.Body)
 	re := regexp.MustCompile(`window\.preloadData\s*=\s*(\{.*\});`)
 	matches := re.FindStringSubmatch(string(body))
 	if matches == nil {
-		return nil, fmt.Errorf("unable to get dashboard %s", dashboardName)
+		return nil, nil, fmt.Errorf("unable to get dashboard %s", dashboardName)
 	}
 	if len(matches) < 2 {
-		return nil, fmt.Errorf("unable to get dashboard %s", dashboardName)
+		return nil, nil, fmt.Errorf("unable to get dashboard %s", dashboardName)
 	}
 	content := strings.ReplaceAll(matches[1], "'", "\"")
 	titles := Titles{}
 	err = json.Unmarshal([]byte(content), &titles)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	monitorTitles := make(map[string]MonitorTitle)
+	var groupOrder []Group
 	for _, group := range titles.MaintenanceList {
 		for _, t := range group.MonitorList {
 			t.GroupId = group.Id
@@ -101,9 +102,13 @@ func GetTitleDict(dashboardName string, url *url.URL) (map[string]MonitorTitle, 
 			t.GroupId = group.Id
 			t.GroupName = strings.TrimSpace(group.Name)
 			monitorTitles[strconv.Itoa(t.Id)] = t
+			groupOrder = appendIfMissing(groupOrder, Group{
+				Id:   group.Id,
+				Name: group.Name,
+			})
 		}
 	}
-	return monitorTitles, nil
+	return monitorTitles, groupOrder, nil
 }
 
 func GetDashboard(dashboardName string, titles map[string]MonitorTitle, config Config) (HeartBeatList, error) {
@@ -144,4 +149,13 @@ func GetDashboard(dashboardName string, titles map[string]MonitorTitle, config C
 		hblist[group] = append(hblist[group], monitor)
 	}
 	return hblist, nil
+}
+
+func appendIfMissing[T comparable](slice []T, elem T) []T {
+	for _, v := range slice {
+		if v == elem {
+			return slice // Element already exists, return original
+		}
+	}
+	return append(slice, elem) // Append since it's not present
 }

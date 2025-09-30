@@ -3,9 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/alecthomas/kong"
-	"github.com/rivo/uniseg"
-	"gopkg.in/yaml.v3"
 	"io"
 	"net/url"
 	"os"
@@ -13,6 +10,10 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/alecthomas/kong"
+	"github.com/rivo/uniseg"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -260,7 +261,7 @@ func main() {
 		config.Symbol.Ok = ""
 	}
 	for _, dash := range config.DashboardPage {
-		titles, err := GetTitleDict(dash, config.Url)
+		titles, order, err := GetTitleDict(dash, config.Url)
 		if err != nil {
 			Error(fmt.Errorf("Dashboard unavailable: %s", err), config)
 			return
@@ -272,15 +273,11 @@ func main() {
 			return
 		}
 
-		groups := []Group{}
-		for group := range dashboard {
-			groups = append(groups, group)
-		}
-		sort.Slice(groups, func(i, j int) bool {
-			return groups[i].Name < groups[j].Name
-		})
+		//sort.Slice(groups, func(i, j int) bool {
+		//	return groups[i].Name < groups[j].Name
+		//})
 
-		content, globalState, _ := Parse(config, groups, dashboard, dash)
+		content, globalState, _ := Parse(config, order, dashboard, dash)
 
 		PrintContent(content)
 		if config.Notify {
