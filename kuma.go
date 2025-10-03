@@ -108,6 +108,9 @@ func GetTitleDict(dashboardName string, url *url.URL) (map[string]MonitorTitle, 
 			})
 		}
 	}
+	for i := range groupOrder {
+		groupOrder[i].Name = strings.TrimSpace(groupOrder[i].Name)
+	}
 	return monitorTitles, groupOrder, nil
 }
 
