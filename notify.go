@@ -3,17 +3,19 @@ package main
 import (
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/containrrr/shoutrrr"
 	"github.com/containrrr/shoutrrr/pkg/router"
 	"github.com/containrrr/shoutrrr/pkg/types"
-	"strings"
-	"time"
 )
 
 const (
 	red    = "0xDC143C"
 	green  = "0x228B22"
 	yellow = "0xFFD700"
+	blue   = "0x00D7FF"
 )
 
 // Notifier holds the shoutrrr service used to send discord notification
@@ -49,6 +51,8 @@ func (csb *ColoredStringBuilder) Color() string {
 		return green
 	case KO:
 		return red
+	case Ignored:
+		return blue
 	}
 	return ""
 }
@@ -84,16 +88,8 @@ func (n *Notifier) Notify(content Content, config Config) {
 	// message.WriteString("# Down status\n")
 	for _, group := range content.Content {
 		message := NewColoredStringBuilder()
-		if (group.IsOK() && !config.KeepOk()) || (group.IsKO() && !config.KeepKo()) || (group.IsWarn() && !config.KeepWarn()) {
-			continue
-		}
 		message.WriteString(fmt.Sprintf("\n### %s\n```ansi\n", removeANSICodes(group.GroupName)))
 		for _, monitor := range group.Monitors {
-			if !config.Keep(monitor.State) ||
-				IsInList(monitor.Name, config.IgnoreConfig.Hidden, config.IgnoreConfig.HiddenRegexList) ||
-				(IsInList(monitor.Name, config.IgnoreConfig.Onlylast, config.IgnoreConfig.OnlyLastRegexList) && (monitor.State == Warn || monitor.State == WarnOk)) {
-				continue
-			}
 			message.Colorize(monitor.State)
 			if message.Len() > webhookLimit {
 				message.WriteString("\n```")

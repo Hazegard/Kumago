@@ -35,6 +35,8 @@ func (s *State) String() string {
 		return "WARN"
 	case KO:
 		return "KO"
+	case Ignored:
+		return "IGNORED"
 	}
 	return "UNKNOWN"
 }
@@ -186,6 +188,13 @@ func (m *Monitor) analyzeStatus(ignoreConf IgnoreConfig) (State, State) {
 		onlyLast := IsInList(m.Name, ignoreConf.Onlylast, ignoreConf.OnlyLastRegexList)
 
 		m.IsIgnored = ignored
+		defer func() {
+			for i := range m.Status {
+				if m.IsIgnored && m.Status[i].Status != OK {
+					m.Status[i].Status = Ignored
+				}
+			}
+		}()
 		// If the monitor is empty (no state has been reported to uptime-kuma).
 		// We consider it as OK and return
 		if len(m.Status) == 0 {
@@ -316,9 +325,6 @@ func (m *Monitor) Beats(c Config) string {
 	}
 	sb := strings.Builder{}
 	for _, status := range m.Status {
-		if m.IsIgnored && status.Status != OK {
-			status.Status = Ignored
-		}
 		if c.BeatEmoji && c.Emoji {
 			sb.WriteString(c.Symbol.GetBeatEmoji(status.Status))
 		} else {
