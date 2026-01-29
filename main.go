@@ -143,7 +143,7 @@ func (c *Config) KeepKo() bool {
 }
 
 func (c *Config) Keep(localStatus State) bool {
-	return !((localStatus == KO && !c.KeepKo()) || (localStatus == Warn && !c.KeepWarn()) || (localStatus == OK && !c.KeepOk()) || (localStatus == Ignored && !c.KeepIgnored()))
+	return !((localStatus == KO && !c.KeepKo()) || ((localStatus == Warn || localStatus == WarnOk) && !c.KeepWarn()) || (localStatus == OK && !c.KeepOk()) || (localStatus == Ignored && !c.KeepIgnored()))
 }
 
 func (c *Config) Validate() error {
