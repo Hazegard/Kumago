@@ -263,7 +263,7 @@ func main() {
 	for _, dash := range config.DashboardPage {
 		titles, order, err := GetTitleDict(dash, config.Url)
 		if err != nil {
-			Error(fmt.Errorf("Dashboard unavailable: %s", err), config)
+			Error(fmt.Errorf("Dashboard title unavailable: %s", err), config)
 			return
 		}
 

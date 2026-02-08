@@ -76,6 +76,7 @@ func GetTitleDict(dashboardName string, url *url.URL) (map[string]MonitorTitle, 
 		return nil, nil, fmt.Errorf("unable to get dashboard %s", dashboardName)
 	}
 	content := strings.ReplaceAll(matches[1], "'", "\"")
+	content = strings.ReplaceAll(content, ":undefined,", ":\"undefined\",")
 	titles := Titles{}
 	err = json.Unmarshal([]byte(content), &titles)
 	if err != nil {
